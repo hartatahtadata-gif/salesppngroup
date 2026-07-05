@@ -732,157 +732,121 @@ export default function AdminPanel({
             </div>
           </div>
 
-          {/* Tab Selector */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 shrink-0 justify-around">
-            <button
-              onClick={() => setActiveTab('products')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center ${
-                activeTab === 'products' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              id="admin-tab-products"
-            >
-              Daftar Produk
-            </button>
-            <button
-              onClick={() => { setActiveTab('record'); setTxError(''); setTxSuccess(''); }}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center ${
-                activeTab === 'record' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              id="admin-tab-record"
-            >
-              Catat Transaksi
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center ${
-                activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              id="admin-tab-history"
-            >
-              Riwayat Log
-            </button>
-            <button
-              onClick={() => setActiveTab('ledger')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center ${
-                activeTab === 'ledger' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-              id="admin-tab-ledger"
-            >
-              Buku Pembantu Per Produk
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* TAB 1: PRODUCT DIRECTORY */}
-      {activeTab === 'products' && (
-        <div className="space-y-6" id="admin-tab-products-content">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Jenis SKU</span>
-              <h3 className="text-2xl font-black text-slate-900 font-sans tracking-tight mt-1">{products.length} SKU</h3>
-              <p className="text-[10px] text-slate-400 mt-2">Jumlah jenis produk terdaftar</p>
-            </div>
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Nilai Total Aset Stok</span>
-              <h3 className="text-2xl font-black text-emerald-600 font-sans tracking-tight mt-1">{formatRupiah(totalInventoryValue)}</h3>
-              <p className="text-[10px] text-slate-400 mt-2">Berdasarkan stok terdaftar * harga satuan</p>
-            </div>
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex justify-end items-end">
-              <button
-                onClick={handleOpenAddProduct}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4.5 py-3 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer w-full md:w-auto justify-center shadow-sm"
-                id="admin-add-product-btn"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Tambah Produk Baru</span>
-              </button>
-            </div>
-          </div>
+      {/* GRAND DASHBOARD LAYOUT - ALL TABLES IN COLUMNS/SECTIONS */}
+      <div className="space-y-8 animate-fade-in mt-6">
+        
+        {/* ROW 1: CATALOG & TRANSACTION FORM SIDE-BY-SIDE */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+          
+          {/* COLUMN 1: CATALOG & STOK PRODUK (xl:col-span-5) */}
+          <div className="xl:col-span-5 space-y-4" id="admin-col-products-catalog">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <ShoppingBag className="h-4 w-4 text-indigo-500" />
+                  Kolom 1: Katalog & Stok SKU
+                </h2>
+                <button
+                  onClick={handleOpenAddProduct}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-3 py-2 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
+                  id="admin-add-product-btn"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Tambah SKU</span>
+                </button>
+              </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-5">
-              <h2 className="text-sm font-bold text-slate-800">Katalog Produk Terdaftar</h2>
-              
+              {/* OVERVIEW STATS INSIDE COLUMN */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-150">
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total SKU</span>
+                  <h3 className="text-lg font-black text-slate-900 font-sans tracking-tight mt-0.5">{products.length} SKU</h3>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-150">
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Nilai Aset Stok</span>
+                  <h3 className="text-sm font-black text-emerald-600 font-sans mt-1.5 truncate" title={formatRupiah(totalInventoryValue)}>
+                    {formatRupiah(totalInventoryValue)}
+                  </h3>
+                </div>
+              </div>
+
+              {/* PRODUCT FILTER & SEARCH */}
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Cari ID atau nama produk..."
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl pl-9 pr-4 py-2.5 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-slate-100"
+                  className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] rounded-xl pl-8.5 pr-4 py-2 w-full focus:outline-none focus:ring-2 focus:ring-slate-100"
                   id="admin-product-search"
                 />
               </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="py-3">ID Produk</th>
-                    <th className="py-3">Nama Produk</th>
-                    <th className="py-3">Expired Date</th>
-                    <th className="py-3 text-right">Harga Satuan</th>
-                    <th className="py-3 text-right">Stok Gudang</th>
-                    <th className="py-3 text-right">Total Nilai</th>
-                    <th className="py-3 pl-4">Satuan</th>
-                    <th className="py-3 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {filteredProducts.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-6 text-center text-slate-400">Tidak ada produk ditemukan.</td>
+              {/* COMPACT TABLE */}
+              <div className="overflow-x-auto max-h-[380px] overflow-y-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 shadow-sm">
+                    <tr className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                      <th className="py-2.5 px-3">Nama SKU</th>
+                      <th className="py-2.5 px-2 text-right">Harga</th>
+                      <th className="py-2.5 px-2 text-right">Stok</th>
+                      <th className="py-2.5 px-3 text-center">Aksi</th>
                     </tr>
-                  ) : (
-                    filteredProducts.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 font-mono font-bold text-indigo-600">{p.id}</td>
-                        <td className="py-3 font-medium text-slate-950">{p.name}</td>
-                        <td className="py-3 font-mono text-slate-500">{p.expiryDate}</td>
-                        <td className="py-3 text-right">{formatRupiah(p.price)}</td>
-                        <td className="py-3 text-right font-semibold">
-                          <span className={p.stock <= 15 ? 'text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded' : ''}>{p.stock}</span>
-                        </td>
-                        <td className="py-3 text-right font-semibold text-slate-900">
-                          {formatRupiah(p.stock * p.price)}
-                        </td>
-                        <td className="py-3 text-slate-500 pl-4">{p.unit}</td>
-                        <td className="py-3">
-                          <div className="flex justify-center items-center gap-2">
-                            <button
-                               onClick={() => handleOpenEditProduct(p)}
-                              className="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors cursor-pointer"
-                              title="Edit"
-                              id={`edit-product-btn-${p.id}`}
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => onDeleteProduct(p.id)}
-                              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors cursor-pointer"
-                              title="Hapus"
-                              id={`delete-product-btn-${p.id}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {filteredProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-slate-400">Tidak ada produk ditemukan.</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredProducts.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2.5 px-3 min-w-[120px]">
+                            <p className="font-bold text-slate-900 leading-tight">{p.name}</p>
+                            <p className="text-[9px] text-slate-400 font-mono mt-0.5">{p.id} • Exp: {p.expiryDate || '-'}</p>
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-semibold">{formatRupiah(p.price)}</td>
+                          <td className="py-2.5 px-2 text-right font-bold">
+                            <span className={p.stock <= 15 ? 'text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded' : ''}>
+                              {p.stock} <span className="text-[9px] font-medium text-slate-400 font-sans">{p.unit}</span>
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex justify-center items-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditProduct(p)}
+                                className="p-1 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors cursor-pointer"
+                                title="Edit"
+                                id={`edit-product-btn-${p.id}`}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => onDeleteProduct(p.id)}
+                                className="p-1 hover:bg-red-50 text-red-600 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus"
+                                id={`delete-product-btn-${p.id}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* TAB 2: RECORD TRANSACTION */}
-      {activeTab === 'record' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in" id="admin-tab-record-content">
+          {/* COLUMN 2: RECORD TRANSACTION (xl:col-span-7) */}
+          <div className="xl:col-span-7" id="admin-col-record-transaction">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in" id="admin-tab-record-content">
           
           {/* Main logging form (7 cols) */}
           <div className="lg:col-span-7 space-y-6">
@@ -1386,11 +1350,15 @@ export default function AdminPanel({
             )}
           </div>
         </div>
-      )}
+      </div> {/* CLOSE COLUMN 2 CONTAINER */}
 
-      {/* TAB 3: TRANSACTION LOG HISTORY */}
-      {activeTab === 'history' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm" id="admin-tab-history-content">
+    </div> {/* CLOSE ROW 1: CATALOG & TRANSACTION FORM SIDE-BY-SIDE */}
+
+        {/* ROW 2: TRANSACTION LOGS & PRODUCT LEDGER SIDE-BY-SIDE */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+          
+          {/* COLUMN 3: TRANSACTION LOG HISTORY */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm" id="admin-tab-history-content">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3.5 mb-5">
             <div>
               <h2 className="text-sm font-bold text-slate-800">Riwayat Catatan Transaksi</h2>
@@ -1522,12 +1490,10 @@ export default function AdminPanel({
               })
             )}
           </div>
-        </div>
-      )}
+        </div> {/* CLOSE COLUMN 3 CONTAINER */}
 
-      {/* TAB 4: PRODUCT LEDGER SECTION (Buku Pembantu Per Produk) */}
-      {activeTab === 'ledger' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6 animate-fade-in" id="admin-product-ledger-section">
+          {/* COLUMN 4: PRODUCT LEDGER SECTION (Buku Pembantu Per Produk) */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6 animate-fade-in" id="admin-product-ledger-section">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -1800,8 +1766,11 @@ export default function AdminPanel({
               Pilih staff dan produk terlebih dahulu untuk memuat buku pembantu.
             </div>
           )}
-        </div>
-      )}
+        </div> {/* CLOSE COLUMN 4 CONTAINER */}
+
+      </div> {/* CLOSE ROW 2: TRANSACTION LOGS & PRODUCT LEDGER SIDE-BY-SIDE */}
+
+    </div> {/* CLOSE GRAND DASHBOARD LAYOUT CONTAINER */}
 
       {/* PRODUCT MODAL (ADD / EDIT) */}
       <AnimatePresence>
