@@ -75,9 +75,40 @@ export default function App() {
             await seedInitialFirebaseData(INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, INITIAL_USERS);
 
             // Fetch live cloud data
-            const fbProducts = await getProductsFromFirebase();
-            const fbTransactions = await getTransactionsFromFirebase();
-            const fbUsers = await getUsersFromFirebase();
+            let fbProducts = await getProductsFromFirebase();
+            let fbTransactions = await getTransactionsFromFirebase();
+            let fbUsers = await getUsersFromFirebase();
+
+            // Clear any lingering demo data in Firestore to prevent them from showing up
+            const DEMO_PRODUCT_IDS = ['PRD-01', 'PRD-02', 'PRD-03', 'PRD-04', 'PRD-05', 'PRD-06', 'PRD-07'];
+            const DEMO_TRANSACTION_IDS = [
+              'TX-001', 'TX-002', 'TX-003', 'TX-004', 'TX-005', 'TX-006', 'TX-007', 'TX-008', 'TX-009', 'TX-010', 'TX-011', 'TX-012', 'TX-013'
+            ];
+            const DEMO_USER_IDS = ['staff-1', 'staff-2', 'staff-3'];
+
+            if (fbProducts) {
+              const demoProducts = fbProducts.filter(p => DEMO_PRODUCT_IDS.includes(p.id));
+              for (const p of demoProducts) {
+                await deleteProductFromFirebase(p.id).catch(err => console.error(err));
+              }
+              fbProducts = fbProducts.filter(p => !DEMO_PRODUCT_IDS.includes(p.id));
+            }
+
+            if (fbTransactions) {
+              const demoTransactions = fbTransactions.filter(t => DEMO_TRANSACTION_IDS.includes(t.id));
+              for (const t of demoTransactions) {
+                await deleteTransactionFromFirebase(t.id).catch(err => console.error(err));
+              }
+              fbTransactions = fbTransactions.filter(t => !DEMO_TRANSACTION_IDS.includes(t.id));
+            }
+
+            if (fbUsers) {
+              const demoUsers = fbUsers.filter(u => DEMO_USER_IDS.includes(u.id));
+              for (const u of demoUsers) {
+                await deleteUserFromFirebase(u.id).catch(err => console.error(err));
+              }
+              fbUsers = fbUsers.filter(u => !DEMO_USER_IDS.includes(u.id));
+            }
 
             // Use live Firebase data if successfully retrieved
             const finalProducts = fbProducts && fbProducts.length > 0 ? fbProducts : localData.products;
