@@ -1354,11 +1354,11 @@ export default function AdminPanel({
 
     </div> {/* CLOSE ROW 1: CATALOG & TRANSACTION FORM SIDE-BY-SIDE */}
 
-        {/* ROW 2: TRANSACTION LOGS & PRODUCT LEDGER SIDE-BY-SIDE */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+        {/* ROW 2: TRANSACTION LOGS & PRODUCT LEDGER (STRETCHED FULL WIDTH) */}
+        <div className="space-y-8">
           
           {/* COLUMN 3: TRANSACTION LOG HISTORY */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm" id="admin-tab-history-content">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm w-full" id="admin-tab-history-content">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3.5 mb-5">
             <div>
               <h2 className="text-sm font-bold text-slate-800">Riwayat Catatan Transaksi</h2>
