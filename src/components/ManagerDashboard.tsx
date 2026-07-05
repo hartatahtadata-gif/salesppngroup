@@ -39,7 +39,12 @@ import {
   Settings,
   Shield,
   ShieldCheck,
-  Check
+  Check,
+  Cloud,
+  CloudOff,
+  Database,
+  HelpCircle,
+  RefreshCw
 } from 'lucide-react';
 
 interface ManagerDashboardProps {
@@ -62,7 +67,7 @@ export default function ManagerDashboard({
   isFirebaseConfigured
 }: ManagerDashboardProps) {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'analytics' | 'access'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'access' | 'database'>('analytics');
 
   // Month & Year state
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
@@ -436,6 +441,18 @@ export default function ManagerDashboard({
             <Users className="h-4 w-4" />
             <span>Manajemen Akses Staff</span>
           </button>
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'database'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            id="tab-database"
+          >
+            <Database className="h-4 w-4" />
+            <span>Koneksi Cloud Database</span>
+          </button>
         </div>
       </div>
 
@@ -736,7 +753,7 @@ export default function ManagerDashboard({
             </div>
           </div>
         </>
-      ) : (
+      ) : activeTab === 'access' ? (
         /* ACCESS AND USER CREDENTIALS MANAGEMENT PANEL */
         <div className="space-y-6 animate-fade-in" id="access-management-panel">
           {/* Controls Bar */}
@@ -887,6 +904,171 @@ export default function ManagerDashboard({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* DATABASE SYNC PANEL WITH BEAUTIFUL USER TUTORIAL */
+        <div className="space-y-6 animate-fade-in" id="database-sync-panel">
+          {/* Header Card */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex gap-4 items-start">
+                <div className={`p-3 rounded-2xl border shrink-0 ${
+                  isFirebaseConfigured && firebaseActive 
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                    : 'bg-amber-50 text-amber-600 border-amber-100'
+                }`}>
+                  <Database className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Sinkronisasi Cloud Database (Firebase Firestore)</h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Hubungkan aplikasi Anda ke cloud database agar data produk, transaksi, dan akses pengguna sinkron secara terpusat di semua PC, HP, dan browser secara real-time.
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0">
+                {isFirebaseConfigured && firebaseActive ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-150 rounded-xl text-xs font-bold font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    TERHUBUNG & SINKRON
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-150 rounded-xl text-xs font-bold font-mono">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    MODE OFFLINE (LOKAL)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Warning / Success Banner */}
+            {!(isFirebaseConfigured && firebaseActive) ? (
+              <div className="mt-5 p-4 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs text-amber-800 space-y-2">
+                <div className="flex gap-2 items-start">
+                  <AlertTriangle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Mengapa produk yang Anda delete atau tambahkan masih muncul di PC/browser lain?</p>
+                    <p className="mt-1 leading-relaxed text-amber-700 font-medium">
+                      Saat ini, aplikasi berjalan dalam <strong>Mode Offline (LocalStorage)</strong>. Di mode ini, data disimpan secara lokal pada memori browser masing-masing PC. Jika Anda mengedit data di PC A, data di PC B tidak akan terupdate karena belum terhubung ke database cloud yang sama.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-xs text-emerald-800 space-y-2">
+                <div className="flex gap-2 items-start">
+                  <Check className="h-4.5 w-4.5 text-emerald-600 shrink-0 mt-0.5 bg-emerald-100 p-0.5 rounded-full" />
+                  <div>
+                    <p className="font-bold">Koneksi Cloud Firestore Aktif!</p>
+                    <p className="mt-1 leading-relaxed text-emerald-700 font-medium">
+                      Setiap perubahan data (seperti menambah produk baru, mengedit transaksi, mendaftarkan staff, atau menghapus item) akan langsung disimpan ke cloud dan terupdate di semua perangkat lain seketika (real-time).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Configuration Guide */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Step by step */}
+            <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-3">
+                <HelpCircle className="h-4.5 w-4.5 text-indigo-500" />
+                <span>Panduan Langkah Menghubungkan Cloud Firestore</span>
+              </h3>
+
+              <div className="space-y-4.5 text-xs text-slate-600">
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">1</div>
+                  <div>
+                    <p className="font-bold text-slate-850">Buat Proyek di Firebase Console</p>
+                    <p className="mt-0.5 text-slate-500 leading-relaxed">
+                      Buka <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" className="text-indigo-600 font-semibold hover:underline">Firebase Console</a>, buat proyek baru (misal: "Sistem MOP Distribusi"), atau pilih proyek yang sudah ada.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">2</div>
+                  <div>
+                    <p className="font-bold text-slate-850">Aktifkan Database Cloud Firestore</p>
+                    <p className="mt-0.5 text-slate-500 leading-relaxed">
+                      Masuk ke menu <strong>Firestore Database</strong> di sidebar Firebase, klik <strong>Create Database</strong>. Pilih lokasi server terdekat (misalnya <i>asia-southeast1</i> untuk Singapura/Indonesia) dan aktifkan dalam mode pengujian (Test Mode) atau gunakan file aturan keamanan <code>firestore.rules</code> yang telah kami siapkan di direktori utama proyek Anda.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">3</div>
+                  <div>
+                    <p className="font-bold text-slate-850">Buat Web App & Salin Konfigurasi SDK</p>
+                    <p className="mt-0.5 text-slate-500 leading-relaxed">
+                      Di halaman ringkasan proyek (Project Overview), klik ikon web <strong>(&lt;/&gt;)</strong> untuk menambahkan aplikasi web baru. Salin bagian objek konfigurasi Firebase (Firebase SDK Configuration) yang berisi parameter seperti <code>apiKey</code>, <code>projectId</code>, dll.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">4</div>
+                  <div>
+                    <p className="font-bold text-slate-850">Masukkan Kunci ke Menu "Settings" AI Studio</p>
+                    <p className="mt-0.5 text-slate-500 leading-relaxed">
+                      Buka panel <strong>Settings</strong> atau <strong>Secrets</strong> di pojok kanan atas aplikasi AI Studio build Anda ini, lalu tambahkan Environment Variables / Secrets baru dengan nama-nama berikut sesuai dengan nilai konfigurasi Firebase Anda:
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Environment Keys Box */}
+            <div className="lg:col-span-5 bg-slate-900 text-slate-200 p-6 rounded-2xl border border-slate-800/80 shadow-lg flex flex-col justify-between">
+              <div>
+                <h3 className="text-xs font-bold tracking-wider uppercase text-indigo-300 flex items-center gap-1.5 border-b border-slate-800 pb-3 mb-4">
+                  <Settings className="h-4 w-4" />
+                  <span>Daftar Parameter yang Harus Diisi</span>
+                </h3>
+
+                <p className="text-[10px] text-slate-400 leading-relaxed mb-4">
+                  Pastikan Anda memasukkan variabel-variabel ini dengan tepat di menu Settings aplikasi agar Firebase aktif secara otomatis:
+                </p>
+
+                <div className="space-y-3 font-mono text-[10px]">
+                  <div>
+                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_API_KEY</span>
+                    <span className="text-slate-500 block text-[9px] -mt-0.5">apiKey dari Firebase config</span>
+                  </div>
+                  <div>
+                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_AUTH_DOMAIN</span>
+                    <span className="text-slate-500 block text-[9px] -mt-0.5">authDomain dari Firebase config</span>
+                  </div>
+                  <div>
+                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_PROJECT_ID</span>
+                    <span className="text-slate-500 block text-[9px] -mt-0.5">projectId dari Firebase config</span>
+                  </div>
+                  <div>
+                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_STORAGE_BUCKET</span>
+                    <span className="text-slate-500 block text-[9px] -mt-0.5">storageBucket dari Firebase config</span>
+                  </div>
+                  <div>
+                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_MESSAGING_SENDER_ID</span>
+                    <span className="text-slate-500 block text-[9px] -mt-0.5">messagingSenderId dari Firebase config</span>
+                  </div>
+                  <div>
+                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_APP_ID</span>
+                    <span className="text-slate-500 block text-[9px] -mt-0.5">appId dari Firebase config</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-800 pt-4 mt-5">
+                <p className="text-[10px] text-slate-400 leading-relaxed flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>
+                  <span><strong>Info Seeding Otomatis:</strong> Saat pertama kali Firebase tersambung, aplikasi akan menyalin data lokal Anda saat ini ke cloud database secara otomatis, sehingga Anda tidak kehilangan data awal.</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
