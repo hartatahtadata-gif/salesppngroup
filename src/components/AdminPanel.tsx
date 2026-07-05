@@ -25,6 +25,8 @@ interface AdminPanelProps {
   onUpdateProducts: (updatedProducts: Product[]) => void;
   onAddTransaction: (newTransaction: Transaction) => void;
   onDeleteProduct: (productId: string) => void;
+  onDeleteTransaction: (transactionId: string) => void;
+  onEditTransaction: (editedTransaction: Transaction) => void;
 }
 
 export default function AdminPanel({ 
@@ -34,7 +36,9 @@ export default function AdminPanel({
   currentAdmin,
   onUpdateProducts,
   onAddTransaction,
-  onDeleteProduct
+  onDeleteProduct,
+  onDeleteTransaction,
+  onEditTransaction
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'products' | 'record' | 'history'>('products');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
@@ -79,6 +83,15 @@ export default function AdminPanel({
   const [cartItems, setCartItems] = useState<{ productId: string; quantity: number }[]>([]);
   const [txError, setTxError] = useState('');
   const [txSuccess, setTxSuccess] = useState('');
+
+  // Edit Transaction states
+  const [showEditTxModal, setShowEditTxModal] = useState(false);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [editTxNotes, setEditTxNotes] = useState('');
+  const [editTxDate, setEditTxDate] = useState('');
+  const [editTxAmount, setEditTxAmount] = useState<number>(0);
+  const [editTxItems, setEditTxItems] = useState<TransactionItem[]>([]);
+  const [editTxError, setEditTxError] = useState('');
 
   const staffUsers = useMemo(() => users.filter(u => u.role === 'staff'), [users]);
 
@@ -286,6 +299,64 @@ export default function AdminPanel({
       
       setCartItems([]);
       setTxNotes('');
+    }
+  };
+
+  const handleEditClick = (tx: Transaction) => {
+    setEditingTx(tx);
+    setEditTxNotes(tx.notes || '');
+    try {
+      const d = new Date(tx.date);
+      const pad = (num: number) => String(num).padStart(2, '0');
+      const formattedDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      setEditTxDate(formattedDate);
+    } catch {
+      setEditTxDate('');
+    }
+    setEditTxAmount(tx.amount || 0);
+    setEditTxItems(tx.items ? [...tx.items] : []);
+    setEditTxError('');
+    setShowEditTxModal(true);
+  };
+
+  const handleEditTxSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+
+    if (editingTx.type === TransactionType.INTAKE) {
+      for (const editItem of editTxItems) {
+        const product = products.find(p => p.id === editItem.productId);
+        const oldItem = editingTx.items?.find(it => it.productId === editItem.productId);
+        const oldQty = oldItem ? oldItem.quantity : 0;
+        const currentStock = product ? product.stock : 0;
+        const availableStock = currentStock + oldQty;
+
+        if (editItem.quantity > availableStock) {
+          setEditTxError(`Stok tidak mencukupi untuk "${editItem.productName}". Maksimal diperbolehkan: ${availableStock}.`);
+          return;
+        }
+      }
+    }
+
+    const updatedTx: Transaction = {
+      ...editingTx,
+      notes: editTxNotes.trim(),
+      date: editTxDate ? new Date(editTxDate).toISOString() : editingTx.date,
+      amount: editingTx.type === TransactionType.DEPOSIT ? editTxAmount : undefined,
+      items: editingTx.type !== TransactionType.DEPOSIT ? editTxItems.map(item => ({
+        ...item,
+        total: item.quantity * item.price
+      })) : undefined
+    };
+
+    onEditTransaction(updatedTx);
+    setShowEditTxModal(false);
+    setEditingTx(null);
+  };
+
+  const handleDeleteTxClick = (txId: string) => {
+    if (confirm('Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini akan mengembalikan stok produk yang terpengaruh.')) {
+      onDeleteTransaction(txId);
     }
   };
 
@@ -848,15 +919,36 @@ export default function AdminPanel({
                       )}
                     </div>
 
-                    <div className="flex sm:flex-col justify-between sm:justify-center items-end shrink-0 border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0">
-                      <span className="text-slate-400 text-[10px] sm:hidden">Total Nominal:</span>
-                      <span className={`text-sm font-black ${
-                        tx.type === TransactionType.INTAKE ? 'text-indigo-600' :
-                        tx.type === TransactionType.DEPOSIT ? 'text-emerald-600' :
-                        'text-blue-600'
-                      }`}>
-                        {formatRupiah(totalTxAmount)}
-                      </span>
+                    <div className="flex sm:flex-col justify-between sm:justify-center items-end shrink-0 border-t sm:border-t-0 border-slate-100 pt-2 sm:pt-0 gap-2.5">
+                      <div className="flex flex-col items-end">
+                        <span className="text-slate-400 text-[10px] sm:hidden">Total Nominal:</span>
+                        <span className={`text-sm font-black ${
+                          tx.type === TransactionType.INTAKE ? 'text-indigo-600' :
+                          tx.type === TransactionType.DEPOSIT ? 'text-emerald-600' :
+                          'text-blue-600'
+                        }`}>
+                          {formatRupiah(totalTxAmount)}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-1.5 mt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditClick(tx)}
+                          className="p-1.5 bg-white hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 text-slate-600 rounded-lg transition-colors cursor-pointer"
+                          title="Edit Transaksi / Catatan"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTxClick(tx.id)}
+                          className="p-1.5 bg-white hover:bg-rose-50 hover:text-rose-600 border border-slate-200 hover:border-rose-200 text-slate-500 rounded-lg transition-colors cursor-pointer"
+                          title="Hapus Transaksi (Kembalikan Stok)"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -975,6 +1067,169 @@ export default function AdminPanel({
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg cursor-pointer font-bold transition-colors"
                   >
                     Simpan
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* TRANSACTION EDIT MODAL */}
+      <AnimatePresence>
+        {showEditTxModal && editingTx && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 text-xs shadow-xl space-y-4 text-slate-800"
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Ubah Transaksi ({editingTx.id})
+                </h3>
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+                  editingTx.type === TransactionType.INTAKE ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                  editingTx.type === TransactionType.DEPOSIT ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                  'bg-blue-50 text-blue-700 border border-blue-100'
+                }`}>
+                  {editingTx.type === TransactionType.INTAKE ? 'Bawa Produk' :
+                   editingTx.type === TransactionType.DEPOSIT ? 'Setoran Tunai' : 'Retur Barang'}
+                </span>
+              </div>
+
+              {editTxError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex gap-1.5 items-center">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                  <span>{editTxError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleEditTxSubmit} className="space-y-4">
+                {/* Staff Name & Admin Info */}
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Nama Staff</span>
+                    <span className="text-xs font-semibold text-slate-800">{editingTx.staffName}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Admin Penginput</span>
+                    <span className="text-xs font-semibold text-slate-850">{editingTx.adminName}</span>
+                  </div>
+                </div>
+
+                {/* Date & Time Field */}
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1 uppercase tracking-wider text-[9px]">Tanggal & Waktu Transaksi</label>
+                  <input
+                    type="datetime-local"
+                    value={editTxDate}
+                    onChange={(e) => setEditTxDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-100 font-medium"
+                    required
+                  />
+                </div>
+
+                {/* If DEPOSIT: amount input */}
+                {editingTx.type === TransactionType.DEPOSIT && (
+                  <div>
+                    <label className="block text-slate-500 font-bold mb-1 uppercase tracking-wider text-[9px]">Jumlah Setoran (Rp)</label>
+                    <input
+                      type="number"
+                      value={editTxAmount}
+                      onChange={(e) => setEditTxAmount(Number(e.target.value))}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-100 font-bold text-xs"
+                      required
+                      min={100}
+                    />
+                  </div>
+                )}
+
+                {/* If INTAKE or RETURN: items quantity inputs */}
+                {editingTx.type !== TransactionType.DEPOSIT && editTxItems.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-slate-500 font-bold uppercase tracking-wider text-[9px]">Kuantitas Item Produk</label>
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                            <th className="p-2.5">Nama Produk</th>
+                            <th className="p-2.5 text-right w-24">Jumlah</th>
+                            <th className="p-2.5 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700">
+                          {editTxItems.map((item, index) => (
+                            <tr key={item.productId}>
+                              <td className="p-2.5 font-medium">{item.productName}</td>
+                              <td className="p-2.5">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const newQty = Math.max(1, Number(e.target.value));
+                                      const updated = [...editTxItems];
+                                      updated[index] = { ...item, quantity: newQty };
+                                      setEditTxItems(updated);
+                                    }}
+                                    className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-indigo-200 font-semibold"
+                                  />
+                                  <span className="text-[10px] text-slate-400">{item.unit}</span>
+                                </div>
+                              </td>
+                              <td className="p-2.5 text-right font-semibold text-slate-850">
+                                {formatRupiah(item.quantity * item.price)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes Input */}
+                <div>
+                  <label className="block text-slate-500 font-bold mb-1 uppercase tracking-wider text-[9px]">Catatan / Keterangan</label>
+                  <textarea
+                    rows={2}
+                    value={editTxNotes}
+                    onChange={(e) => setEditTxNotes(e.target.value)}
+                    placeholder="Contoh: Pengambilan produk tambahan..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-100 font-medium"
+                  />
+                </div>
+
+                {/* Estimate total value of transaction */}
+                {editingTx.type !== TransactionType.DEPOSIT && (
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 flex justify-between font-bold text-slate-700">
+                    <span>Estimasi Total Baru:</span>
+                    <span className="text-indigo-600 font-black">
+                      {formatRupiah(editTxItems.reduce((acc, it) => acc + (it.quantity * it.price), 0))}
+                    </span>
+                  </div>
+                )}
+
+                {/* Modal actions */}
+                <div className="flex gap-2.5 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditTxModal(false);
+                      setEditingTx(null);
+                    }}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg cursor-pointer font-bold transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg cursor-pointer font-bold transition-colors"
+                  >
+                    Simpan Perubahan
                   </button>
                 </div>
               </form>

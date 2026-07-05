@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, Product, Transaction } from './types';
+import { User, UserRole, Product, Transaction, TransactionType } from './types';
 import { getStoredData, saveStoredData } from './data/initialData';
 import LoginScreen from './components/LoginScreen';
 import StaffDashboard from './components/StaffDashboard';
@@ -25,6 +25,7 @@ import {
   saveProductToFirebase,
   deleteProductFromFirebase,
   saveTransactionToFirebase,
+  deleteTransactionFromFirebase,
   saveUserToFirebase,
   deleteUserFromFirebase,
   seedInitialFirebaseData,
@@ -124,6 +125,91 @@ export default function App() {
         }
       } catch (e) {
         console.error("Firebase transaction sync error:", e);
+      }
+    }
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    const tx = transactions.find(t => t.id === transactionId);
+    if (!tx) return;
+
+    let updatedProds = [...products];
+    if (tx.type === TransactionType.INTAKE && tx.items) {
+      updatedProds = products.map(p => {
+        const item = tx.items?.find(it => it.productId === p.id);
+        return item ? { ...p, stock: p.stock + item.quantity } : p;
+      });
+    } else if (tx.type === TransactionType.RETURN && tx.items) {
+      updatedProds = products.map(p => {
+        const item = tx.items?.find(it => it.productId === p.id);
+        return item ? { ...p, stock: Math.max(0, p.stock - item.quantity) } : p;
+      });
+    }
+
+    const updatedTxs = transactions.filter(t => t.id !== transactionId);
+    setProducts(updatedProds);
+    setTransactions(updatedTxs);
+    saveStoredData(updatedProds, updatedTxs, users);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        await deleteTransactionFromFirebase(transactionId);
+        if (tx.type !== TransactionType.DEPOSIT && tx.items) {
+          for (const item of tx.items) {
+            const p = updatedProds.find(pr => pr.id === item.productId);
+            if (p) {
+              await saveProductToFirebase(p);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Firebase transaction deletion sync error:", e);
+      }
+    }
+  };
+
+  const handleEditTransaction = async (editedTransaction: Transaction) => {
+    const oldTx = transactions.find(t => t.id === editedTransaction.id);
+    if (!oldTx) return;
+
+    let tempProds = [...products];
+    if (oldTx.type === TransactionType.INTAKE && oldTx.items) {
+      tempProds = tempProds.map(p => {
+        const item = oldTx.items?.find(it => it.productId === p.id);
+        return item ? { ...p, stock: p.stock + item.quantity } : p;
+      });
+    } else if (oldTx.type === TransactionType.RETURN && oldTx.items) {
+      tempProds = tempProds.map(p => {
+        const item = oldTx.items?.find(it => it.productId === p.id);
+        return item ? { ...p, stock: Math.max(0, p.stock - item.quantity) } : p;
+      });
+    }
+
+    if (editedTransaction.type === TransactionType.INTAKE && editedTransaction.items) {
+      tempProds = tempProds.map(p => {
+        const item = editedTransaction.items?.find(it => it.productId === p.id);
+        return item ? { ...p, stock: Math.max(0, p.stock - item.quantity) } : p;
+      });
+    } else if (editedTransaction.type === TransactionType.RETURN && editedTransaction.items) {
+      tempProds = tempProds.map(p => {
+        const item = editedTransaction.items?.find(it => it.productId === p.id);
+        return item ? { ...p, stock: p.stock + item.quantity } : p;
+      });
+    }
+
+    const updatedTxs = transactions.map(t => t.id === editedTransaction.id ? editedTransaction : t);
+    setProducts(tempProds);
+    setTransactions(updatedTxs);
+    saveStoredData(tempProds, updatedTxs, users);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        await saveTransactionToFirebase(editedTransaction);
+        for (const p of tempProds) {
+          await saveProductToFirebase(p);
+        }
+      } catch (e) {
+        console.error("Firebase transaction edit sync error:", e);
       }
     }
   };
@@ -326,6 +412,8 @@ export default function App() {
                       onUpdateProducts={handleUpdateProducts}
                       onAddTransaction={handleAddTransaction}
                       onDeleteProduct={handleDeleteProduct}
+                      onDeleteTransaction={handleDeleteTransaction}
+                      onEditTransaction={handleEditTransaction}
                     />
                   </motion.div>
                 )}

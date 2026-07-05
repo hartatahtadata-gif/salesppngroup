@@ -204,6 +204,17 @@ export async function deleteUserFromFirebase(userId: string): Promise<void> {
   }
 }
 
+// Delete a transaction
+export async function deleteTransactionFromFirebase(transactionId: string): Promise<void> {
+  if (!db) return;
+  const path = `transactions/${transactionId}`;
+  try {
+    await deleteDoc(doc(db, "transactions", transactionId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
 // Seeding tool to populate Firebase on initial setup if collections are empty
 export async function seedInitialFirebaseData(
   initialProducts: Product[],
