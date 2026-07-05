@@ -124,6 +124,18 @@ export default function StaffDashboard({
           }
           counts[item.productId].quantity -= item.quantity;
         });
+      } else if (tx.type === TransactionType.DEPOSIT) {
+        tx.items?.forEach(item => {
+          if (!counts[item.productId]) {
+            counts[item.productId] = {
+              name: item.productName,
+              unit: item.unit,
+              price: item.price,
+              quantity: 0
+            };
+          }
+          counts[item.productId].quantity -= item.quantity;
+        });
       }
     });
 

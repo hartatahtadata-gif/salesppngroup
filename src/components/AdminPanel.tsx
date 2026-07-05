@@ -79,6 +79,18 @@ export default function AdminPanel({
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const [txNotes, setTxNotes] = useState('');
   
+  // States for deposit by product
+  const [selectedDepositProductId, setSelectedDepositProductId] = useState<string>('');
+  const [depositProductQty, setDepositProductQty] = useState<number>(1);
+  const [depositCartItems, setDepositCartItems] = useState<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    price: number;
+    unit: string;
+    total: number;
+  }[]>([]);
+  
   // Transaction items for Intake and Return
   const [cartItems, setCartItems] = useState<{ productId: string; quantity: number }[]>([]);
   const [txError, setTxError] = useState('');
@@ -115,6 +127,45 @@ export default function AdminPanel({
   const totalInventoryValue = useMemo(() => {
     return products.reduce((acc, p) => acc + (p.stock * p.price), 0);
   }, [products]);
+
+  // Calculate undeposited products for the selected staff
+  const undepositedProductsOfSelectedStaff = useMemo(() => {
+    if (!selectedStaffId) return [];
+    
+    const taken: { [id: string]: number } = {};
+    const returned: { [id: string]: number } = {};
+    const deposited: { [id: string]: number } = {};
+    
+    // Look at all transactions for this staff
+    const staffTxs = transactions.filter(t => t.staffId === selectedStaffId);
+    
+    staffTxs.forEach(tx => {
+      if (tx.type === TransactionType.INTAKE && tx.items) {
+        tx.items.forEach(it => {
+          taken[it.productId] = (taken[it.productId] || 0) + it.quantity;
+        });
+      } else if (tx.type === TransactionType.RETURN && tx.items) {
+        tx.items.forEach(it => {
+          returned[it.productId] = (returned[it.productId] || 0) + it.quantity;
+        });
+      } else if (tx.type === TransactionType.DEPOSIT && tx.items) {
+        tx.items.forEach(it => {
+          deposited[it.productId] = (deposited[it.productId] || 0) + it.quantity;
+        });
+      }
+    });
+    
+    return products.map(p => {
+      const tQty = taken[p.id] || 0;
+      const rQty = returned[p.id] || 0;
+      const dQty = deposited[p.id] || 0;
+      const unpaidQty = tQty - rQty - dQty;
+      return {
+        ...p,
+        unpaidQty
+      };
+    }).filter(p => p.unpaidQty > 0);
+  }, [selectedStaffId, transactions, products]);
 
   // Product CRUD Handlers
   const handleOpenAddProduct = () => {
@@ -200,6 +251,63 @@ export default function AdminPanel({
     setCartItems(cartItems.filter(item => item.productId !== productId));
   };
 
+  const handleAddDepositCartItem = (productId: string, quantity: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const unpaidProd = undepositedProductsOfSelectedStaff.find(p => p.id === productId);
+    const maxQty = unpaidProd ? unpaidProd.unpaidQty : 0;
+
+    // Check if item already exists in deposit cart
+    const existing = depositCartItems.find(it => it.productId === productId);
+    const existingQty = existing ? existing.quantity : 0;
+    const newQty = existingQty + quantity;
+
+    if (newQty > maxQty) {
+      setTxError(`Kuantitas melebihi sisa yang belum disetor (${maxQty} ${product.unit}).`);
+      return;
+    }
+
+    let updatedCart;
+    if (existing) {
+      updatedCart = depositCartItems.map(it => 
+        it.productId === productId 
+          ? { ...it, quantity: newQty, total: newQty * product.price } 
+          : it
+      );
+    } else {
+      updatedCart = [
+        ...depositCartItems,
+        {
+          productId: product.id,
+          productName: product.name,
+          quantity: quantity,
+          price: product.price,
+          unit: product.unit,
+          total: quantity * product.price
+        }
+      ];
+    }
+
+    setDepositCartItems(updatedCart);
+    
+    // Auto-update deposit amount
+    const newTotal = updatedCart.reduce((sum, item) => sum + item.total, 0);
+    setDepositAmount(newTotal);
+    
+    // Reset selection
+    setSelectedDepositProductId('');
+    setDepositProductQty(1);
+    setTxError('');
+  };
+
+  const handleRemoveDepositCartItem = (productId: string) => {
+    const updatedCart = depositCartItems.filter(it => it.productId !== productId);
+    setDepositCartItems(updatedCart);
+    const newTotal = updatedCart.reduce((sum, item) => sum + item.total, 0);
+    setDepositAmount(newTotal);
+  };
+
   // Transaction logging submit
   const handleLogTransaction = (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,13 +337,26 @@ export default function AdminPanel({
         adminId: currentAdmin.id,
         adminName: currentAdmin.name,
         amount: Number(depositAmount),
-        notes: txNotes.trim() || 'Setoran tunai harian'
+        items: depositCartItems.length > 0 ? depositCartItems.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: item.price,
+          total: item.total
+        })) : undefined,
+        notes: txNotes.trim() || (depositCartItems.length > 0 
+          ? `Setoran produk: ${depositCartItems.map(it => `${it.productName} (${it.quantity} ${it.unit})`).join(', ')}`
+          : 'Setoran tunai harian')
       };
 
       onAddTransaction(newTx);
       setTxSuccess(`Setoran sebesar ${formatRupiah(depositAmount)} oleh ${staffUser.name} berhasil dicatat.`);
       setDepositAmount(0);
       setTxNotes('');
+      setDepositCartItems([]);
+      setSelectedDepositProductId('');
+      setDepositProductQty(1);
     } else {
       // Intake or Return
       if (cartItems.length === 0) {
@@ -647,16 +768,160 @@ export default function AdminPanel({
 
                 {/* 3. Conditional: Deposit Amount vs Cart List */}
                 {selectedTxType === TransactionType.DEPOSIT ? (
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal Setoran (Rupiah)</label>
-                    <input
-                      type="number"
-                      placeholder="Masukkan nilai setoran, misal: 1500000"
-                      value={depositAmount || ''}
-                      onChange={(e) => { setDepositAmount(Number(e.target.value)); setTxError(''); }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-100 text-xs"
-                      id="tx-deposit-amount"
-                    />
+                  <div className="space-y-4">
+                    {/* Select product from undeposited products */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                        Pilih Produk Belum Disetor (Opsional)
+                      </label>
+                      {!selectedStaffId ? (
+                        <p className="text-[10px] text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-100">
+                          Silakan pilih staff penjualan terlebih dahulu untuk memuat produk yang dibawa.
+                        </p>
+                      ) : undepositedProductsOfSelectedStaff.length === 0 ? (
+                        <p className="text-[10px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                          Staff ini tidak memiliki produk yang belum lunas/disetor saat ini.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <select
+                              value={selectedDepositProductId}
+                              onChange={(e) => {
+                                setSelectedDepositProductId(e.target.value);
+                                setDepositProductQty(1);
+                                setTxError('');
+                              }}
+                              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-slate-100"
+                              id="deposit-product-select"
+                            >
+                              <option value="">-- Pilih Produk Belum Lunas --</option>
+                              {undepositedProductsOfSelectedStaff.map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} (Sisa: {p.unpaidQty} {p.unit} - {formatRupiah(p.price)})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {selectedDepositProductId && (
+                            <div className="bg-emerald-50/40 p-3 rounded-xl border border-emerald-100/80 space-y-3">
+                              {(() => {
+                                const prod = undepositedProductsOfSelectedStaff.find(p => p.id === selectedDepositProductId);
+                                if (!prod) return null;
+                                return (
+                                  <>
+                                    <div className="flex justify-between text-[11px] text-slate-600 font-medium">
+                                      <span>Maksimal yang belum disetor:</span>
+                                      <span className="font-bold text-slate-900">{prod.unpaidQty} {prod.unit}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex-1">
+                                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Jumlah PCS yang Disetor</label>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          max={prod.unpaidQty}
+                                          value={depositProductQty}
+                                          onChange={(e) => {
+                                            const val = Math.max(1, Math.min(prod.unpaidQty, Number(e.target.value)));
+                                            setDepositProductQty(val);
+                                          }}
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 font-bold"
+                                        />
+                                      </div>
+                                      <div className="shrink-0 text-right">
+                                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Total Nilai</label>
+                                        <span className="text-xs font-black text-emerald-700">{formatRupiah(depositProductQty * prod.price)}</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddDepositCartItem(selectedDepositProductId, depositProductQty)}
+                                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold py-2 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      Tambahkan ke Setoran
+                                    </button>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Deposit Cart Items List */}
+                    {depositCartItems.length > 0 && (
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                        <div className="flex justify-between items-center pb-1.5 border-b border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Detail Setoran Produk</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDepositCartItems([]);
+                              setDepositAmount(0);
+                            }}
+                            className="text-[10px] text-red-500 hover:text-red-700 font-semibold cursor-pointer"
+                          >
+                            Bersihkan Semua
+                          </button>
+                        </div>
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                          {depositCartItems.map(item => (
+                            <div key={item.productId} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200 text-xs">
+                              <div className="min-w-0 flex-1 pr-1">
+                                <p className="font-semibold text-slate-800 truncate">{item.productName}</p>
+                                <p className="text-[10px] text-slate-500">{item.quantity} {item.unit} x {formatRupiah(item.price)}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800">{formatRupiah(item.total)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDepositCartItem(item.productId)}
+                                  className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
+                                  title="Hapus"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Total Nominal Setoran */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Total Nominal Setoran (Rupiah)
+                        </label>
+                        {depositCartItems.length > 0 && (
+                          <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 font-medium">
+                            Terkunci: Otomatis dari produk terpilih
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        placeholder="Masukkan nilai setoran, misal: 1500000"
+                        value={depositAmount || ''}
+                        onChange={(e) => {
+                          if (depositCartItems.length === 0) {
+                            setDepositAmount(Number(e.target.value));
+                            setTxError('');
+                          }
+                        }}
+                        disabled={depositCartItems.length > 0}
+                        className={`w-full border rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 ${
+                          depositCartItems.length > 0 
+                            ? 'bg-slate-100 border-slate-200 text-slate-500 font-bold' 
+                            : 'bg-slate-50 border-slate-200 focus:ring-slate-100'
+                        }`}
+                        id="tx-deposit-amount"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -759,15 +1024,72 @@ export default function AdminPanel({
           {/* Catalog Quick Selector (5 cols) */}
           <div className="lg:col-span-5">
             {selectedTxType === TransactionType.DEPOSIT ? (
-              <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm h-full flex flex-col justify-center items-center text-center">
-                <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600 mb-4 border border-emerald-100">
-                  <DollarSign className="h-8 w-8" />
+              !selectedStaffId ? (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm h-full flex flex-col justify-center items-center text-center">
+                  <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-600 mb-4 border border-emerald-100">
+                    <DollarSign className="h-8 w-8" />
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-sm">Pencatatan Setoran Tunai</h3>
+                  <p className="text-slate-500 text-xs max-w-xs mt-2 leading-relaxed">
+                    Silakan pilih staff penjualan di sebelah kiri terlebih dahulu untuk melihat daftar produk bawaan mereka yang belum disetorkan uangnya.
+                  </p>
                 </div>
-                <h3 className="font-bold text-slate-800 text-sm">Pencatatan Setoran Tunai</h3>
-                <p className="text-slate-500 text-xs max-w-xs mt-2 leading-relaxed">
-                  Gunakan form sebelah kiri untuk mencatat setoran uang tunai yang diserahkan staff penjualan kepada admin penjualan. Setoran ini akan langsung memotong sisa tagihan staff yang bersangkutan.
-                </p>
-              </div>
+              ) : (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-[520px]">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-slate-800 text-sm">Produk Belum Disetor</h3>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                      Daftar produk yang dibawa oleh <span className="font-semibold text-indigo-600">{users.find(u => u.id === selectedStaffId)?.name}</span> namun belum dibayarkan/disetor uangnya.
+                    </p>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 font-sans">
+                    {undepositedProductsOfSelectedStaff.length === 0 ? (
+                      <div className="p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400 h-full flex flex-col justify-center items-center">
+                        <Check className="h-8 w-8 text-emerald-500 mb-2 bg-emerald-50 p-1.5 rounded-full" />
+                        <span className="font-bold text-slate-700 mb-1">Semua Produk Lunas!</span>
+                        <span className="text-slate-400">Tidak ada sisa produk yang belum disetor uangnya untuk staff ini.</span>
+                      </div>
+                    ) : (
+                      undepositedProductsOfSelectedStaff.map(p => (
+                        <div 
+                          key={p.id} 
+                          className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 flex justify-between items-center text-xs group hover:border-emerald-300 transition-all"
+                        >
+                          <div className="min-w-0 flex-1 pr-2">
+                            <p className="font-semibold text-slate-800 truncate">{p.name}</p>
+                            <div className="flex flex-col gap-1 mt-1 text-[10px] text-slate-500">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-indigo-600">{p.id}</span>
+                                <span>•</span>
+                                <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">Belum Setor: {p.unpaidQty} {p.unit}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span>Harga: {formatRupiah(p.price)}</span>
+                                <span>•</span>
+                                <span>Tagihan: <span className="font-bold text-slate-700">{formatRupiah(p.unpaidQty * p.price)}</span></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDepositProductId(p.id);
+                              setDepositProductQty(1);
+                              setTxError('');
+                            }}
+                            className="bg-white group-hover:bg-emerald-600 group-hover:text-white border border-slate-200 group-hover:border-transparent text-slate-600 px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center font-bold text-[10px] shrink-0"
+                            title="Pilih untuk Disetor"
+                          >
+                            Setor
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )
             ) : (
               <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col max-h-[600px]">
                 <div className="mb-4">
