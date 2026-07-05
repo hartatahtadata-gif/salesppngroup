@@ -1,0 +1,6 @@
+{
+  "name": "Monitor Pengambilan Produk",
+  "description": "Aplikasi monitoring pengambilan produk, pencatatan setoran, retur barang, dan dashboard bulanan untuk staff, admin, dan manajer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
