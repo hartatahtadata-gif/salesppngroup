@@ -57,12 +57,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY,
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyAYqnqzKT_zLZ2kzZtTXoOR3oEZjwwwbls",
+  authDomain: "herbalppngroup.firebaseapp.com",
+  projectId: "herbalppngroup",
+  storageBucket: "herbalppngroup.firebasestorage.app",
+  messagingSenderId: "351637453793",
+  appId: "1:351637453793:web:71d6244b2848a66225f0a0",
+  measurementId: "G-YNZGZV1DSX"
 };
 
 // Check if Firebase is properly configured
