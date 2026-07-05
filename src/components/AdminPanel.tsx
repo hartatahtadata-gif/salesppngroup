@@ -377,10 +377,22 @@ export default function AdminPanel({
         return;
       }
 
+      let transactionDate = new Date().toISOString();
+      if (txDate) {
+        try {
+          const parsed = new Date(txDate);
+          const now = new Date();
+          parsed.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+          transactionDate = parsed.toISOString();
+        } catch (e) {
+          console.error("Failed to parse custom transaction date:", e);
+        }
+      }
+
       const newTx: Transaction = {
         id: `TX-${Date.now().toString().slice(-6)}`,
         type: TransactionType.DEPOSIT,
-        date: new Date().toISOString(),
+        date: transactionDate,
         staffId: staffUser.id,
         staffName: staffUser.name,
         adminId: currentAdmin.id,
@@ -826,15 +838,21 @@ export default function AdminPanel({
                   </div>
                 </div>
 
-                {/* 2b. Tanggal untuk Bawa Produk */}
-                {selectedTxType === TransactionType.INTAKE && (
+                {/* 2b. Tanggal untuk Bawa Produk / Setor Uang */}
+                {(selectedTxType === TransactionType.INTAKE || selectedTxType === TransactionType.DEPOSIT) && (
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Tanggal Bawa Produk</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                      {selectedTxType === TransactionType.INTAKE ? 'Tanggal Bawa Produk' : 'Tanggal Setoran'}
+                    </label>
                     <input
                       type="date"
                       value={txDate}
                       onChange={(e) => setTxDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold font-mono"
+                      className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 transition-all font-semibold font-mono ${
+                        selectedTxType === TransactionType.INTAKE 
+                          ? 'focus:ring-indigo-500/10 focus:border-indigo-500' 
+                          : 'focus:ring-emerald-500/10 focus:border-emerald-500'
+                      }`}
                       id="tx-custom-date-input"
                       required
                     />
