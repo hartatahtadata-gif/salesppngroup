@@ -45,7 +45,8 @@ import {
   Database,
   HelpCircle,
   RefreshCw,
-  ChevronDown
+  ChevronDown,
+  Layers
 } from 'lucide-react';
 
 interface ManagerDashboardProps {
@@ -68,7 +69,11 @@ export default function ManagerDashboard({
   isFirebaseConfigured
 }: ManagerDashboardProps) {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'analytics' | 'access' | 'database'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'ledger' | 'access'>('analytics');
+
+  // Active ledger selections for Manager Product sub-ledger
+  const [ledgerStaffId, setLedgerStaffId] = useState<string>('');
+  const [ledgerProductId, setLedgerProductId] = useState<string>('');
 
   // Month & Year state
   const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(new Date().getMonth() + 1); // 1-12 or 'all'
@@ -158,6 +163,127 @@ export default function ManagerDashboard({
       minimumFractionDigits: 0
     }).format(value);
   };
+
+  const staffUsers = useMemo(() => users.filter(u => u.role === UserRole.STAFF), [users]);
+
+  const activeLedgerStaffId = ledgerStaffId || (staffUsers.length > 0 ? staffUsers[0].id : '');
+  const activeLedgerProductId = ledgerProductId || (products.length > 0 ? products[0].id : '');
+  const activeLedgerProduct = products.find(p => p.id === activeLedgerProductId);
+  const activeLedgerStaff = staffUsers.find(u => u.id === activeLedgerStaffId);
+
+  const ledgerHistoryData = useMemo(() => {
+    if (!activeLedgerStaffId || !activeLedgerProductId) {
+      return { 
+        debitList: [], 
+        creditList: [], 
+        totalDebitQty: 0, 
+        totalDebitAmount: 0, 
+        totalCreditQty: 0, 
+        totalCreditAmount: 0, 
+        balance: 0 
+      };
+    }
+
+    const debitList: Array<{
+      id: string;
+      date: string;
+      adminName: string;
+      quantity: number;
+      price: number;
+      total: number;
+      notes: string;
+    }> = [];
+
+    const creditList: Array<{
+      id: string;
+      date: string;
+      type: TransactionType;
+      quantity: number;
+      price: number;
+      total: number;
+      notes: string;
+    }> = [];
+
+    // Filter by active staff member first
+    const staffTxs = transactions.filter(tx => tx.staffId === activeLedgerStaffId);
+    
+    // Sort transactions by date ascending (oldest first to build running ledger)
+    const sortedTxs = [...staffTxs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    sortedTxs.forEach(tx => {
+      if (tx.type === TransactionType.INTAKE && tx.items) {
+        const item = tx.items.find(it => it.productId === activeLedgerProductId);
+        if (item) {
+          debitList.push({
+            id: tx.id,
+            date: tx.date,
+            adminName: tx.adminName,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            notes: tx.notes || ''
+          });
+        }
+      } else if (tx.type === TransactionType.RETURN && tx.items) {
+        const item = tx.items.find(it => it.productId === activeLedgerProductId);
+        if (item) {
+          creditList.push({
+            id: tx.id,
+            date: tx.date,
+            type: TransactionType.RETURN,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            notes: tx.notes || 'Retur Barang'
+          });
+        }
+      } else if (tx.type === TransactionType.DEPOSIT && tx.items) {
+        const item = tx.items.find(it => it.productId === activeLedgerProductId);
+        if (item) {
+          creditList.push({
+            id: tx.id,
+            date: tx.date,
+            type: TransactionType.DEPOSIT,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            notes: tx.notes || 'Setoran Tunai'
+          });
+        }
+      }
+    });
+
+    const totalDebitQty = debitList.reduce((sum, item) => sum + item.quantity, 0);
+    const totalDebitAmount = debitList.reduce((sum, item) => sum + item.total, 0);
+
+    const totalCreditQty = creditList.reduce((sum, item) => sum + item.quantity, 0);
+    const totalCreditAmount = creditList.reduce((sum, item) => sum + item.total, 0);
+
+    const balance = totalDebitAmount - totalCreditAmount;
+
+    return {
+      debitList,
+      creditList,
+      totalDebitQty,
+      totalDebitAmount,
+      totalCreditQty,
+      totalCreditAmount,
+      balance
+    };
+  }, [transactions, activeLedgerStaffId, activeLedgerProductId]);
+
+  const ledgerPerbandinganLabel = useMemo(() => {
+    const { totalDebitQty, totalCreditQty } = ledgerHistoryData;
+    if (totalDebitQty === 0 && totalCreditQty === 0) return { ar: 0, setor: 0 };
+    const gcd = (a: number, b: number): number => {
+      return b === 0 ? a : gcd(b, a % b);
+    };
+    const divisor = gcd(totalDebitQty, totalCreditQty) || 1;
+    return {
+      ar: totalDebitQty / divisor,
+      setor: totalCreditQty / divisor
+    };
+  }, [ledgerHistoryData]);
 
   // Filter transactions for selected Month & Year
   const filteredTransactions = useMemo(() => {
@@ -511,10 +637,10 @@ export default function ManagerDashboard({
         </div>
 
         {/* Tab switch buttons */}
-        <div className="flex bg-slate-50/50 px-6 border-t border-slate-50">
+        <div className="flex bg-slate-50/50 px-6 border-t border-slate-50 overflow-x-auto">
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
               activeTab === 'analytics'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -525,8 +651,20 @@ export default function ManagerDashboard({
             <span>Dashboard Analisis</span>
           </button>
           <button
+            onClick={() => setActiveTab('ledger')}
+            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+              activeTab === 'ledger'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            id="tab-ledger"
+          >
+            <Layers className="h-4 w-4" />
+            <span>Laporan & Buku Pembantu</span>
+          </button>
+          <button
             onClick={() => setActiveTab('access')}
-            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
               activeTab === 'access'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -535,18 +673,6 @@ export default function ManagerDashboard({
           >
             <Users className="h-4 w-4" />
             <span>Manajemen Akses Staff</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('database')}
-            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === 'database'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-            id="tab-database"
-          >
-            <Database className="h-4 w-4" />
-            <span>Koneksi Cloud Database</span>
           </button>
         </div>
       </div>
@@ -853,7 +979,283 @@ export default function ManagerDashboard({
             </div>
           </div>
         </>
-      ) : activeTab === 'access' ? (
+      ) : activeTab === 'ledger' ? (
+        /* PRODUCT LEDGER SECTION (Buku Pembantu Per Produk) */
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6 animate-fade-in" id="manager-product-ledger-section">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="h-4 w-4 text-amber-500" />
+                Laporan & Buku Pembantu Per Produk
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Rincian riwayat pengambilan (Distribusi) vs penyelesaian (Setoran & Retur) per staff dan produk.
+              </p>
+            </div>
+            
+            <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 text-slate-800">
+              {/* Staff Selector */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs font-semibold text-slate-400 whitespace-nowrap font-sans">Nama Staff:</span>
+                <div className="relative w-full sm:w-52">
+                  <select
+                    value={activeLedgerStaffId}
+                    onChange={(e) => setLedgerStaffId(e.target.value)}
+                    className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-850 text-xs rounded-xl px-3.5 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer pr-10 font-sans"
+                    id="manager-ledger-staff-selector"
+                  >
+                    {staffUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.id})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Product Selector */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs font-semibold text-slate-400 whitespace-nowrap font-sans">Pilih Produk:</span>
+                <div className="relative w-full sm:w-52">
+                  <select
+                    value={activeLedgerProductId}
+                    onChange={(e) => setLedgerProductId(e.target.value)}
+                    className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-850 text-xs rounded-xl px-3.5 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer pr-10 font-sans"
+                    id="manager-ledger-product-selector"
+                  >
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.id})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {activeLedgerStaff && activeLedgerProduct ? (
+            <div className="space-y-6">
+              {/* Product Ledger Summary Banner */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[9px] bg-amber-200/60 text-amber-800 font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
+                      Produk Terpilih
+                    </span>
+                    <span className="text-[9px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
+                      Staff: {activeLedgerStaff.name}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-black text-slate-900 mt-1.5 font-sans">{activeLedgerProduct.name}</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-sans">Satuan: <span className="font-bold">{activeLedgerProduct.unit}</span> • Harga Satuan Default: <span className="font-bold">{formatRupiah(activeLedgerProduct.price)}</span></p>
+                </div>
+                <div className="text-left sm:text-right font-sans">
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Sisa Kewajiban Tagihan Produk Ini</span>
+                  <span className={`text-lg font-black block mt-0.5 ${ledgerHistoryData.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {ledgerHistoryData.balance > 0 ? formatRupiah(ledgerHistoryData.balance) : 'LUNAS / TIDAK ADA TAGIHAN'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Split Tables Container */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                
+                {/* LEFT SIDE: DISTRIBUSI (D) */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-yellow-400 text-slate-900 font-black text-center py-2 text-xs uppercase tracking-wider border-b border-slate-200">
+                    DISTRIBUSI (DEBIT / AMBIL)
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-[11px] font-sans text-slate-850">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-center">
+                          <th className="py-2.5 px-2 border-r border-slate-200 w-10">NO</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200">TGL / BLN</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200">ADMINISTRATOR</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200 w-12 text-right">QTY</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200 text-right">HARGA</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200 text-right">JUMLAH</th>
+                          <th className="py-2.5 px-2">KETERANGAN</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {ledgerHistoryData.debitList.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-slate-400 italic">
+                              Tidak ada data pengambilan untuk produk ini oleh {activeLedgerStaff.name}.
+                            </td>
+                          </tr>
+                        ) : (
+                          ledgerHistoryData.debitList.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50 text-center">
+                              <td className="py-2 px-2 border-r border-slate-200 font-medium text-slate-400">{idx + 1}</td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-slate-600 font-mono">
+                                {new Date(item.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
+                              </td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-slate-800 text-left font-semibold truncate max-w-[100px]">{item.adminName}</td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-900">{item.quantity}</td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-right text-slate-500">{formatRupiah(item.price)}</td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-800">{formatRupiah(item.total)}</td>
+                              <td className="py-2 px-2 text-left text-slate-500 truncate max-w-[120px]" title={item.notes}>{item.notes || '-'}</td>
+                            </tr>
+                          ))
+                        )}
+                        {/* Empty rows to mimic spreadsheet feel (min 3 rows) */}
+                        {ledgerHistoryData.debitList.length < 3 && 
+                          Array.from({ length: 3 - ledgerHistoryData.debitList.length }).map((_, i) => (
+                            <tr key={`empty-debit-${i}`} className="h-8">
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td></td>
+                            </tr>
+                          ))
+                        }
+                        {/* Total Row */}
+                        <tr className="bg-yellow-100 font-bold border-t-2 border-slate-300 text-center">
+                          <td colSpan={3} className="py-2 px-2 text-right border-r border-slate-200">TOTAL DISTRIBUSI (D):</td>
+                          <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-900">{ledgerHistoryData.totalDebitQty}</td>
+                          <td className="py-2 px-2 border-r border-slate-200"></td>
+                          <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-850 font-mono">{formatRupiah(ledgerHistoryData.totalDebitAmount)}</td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* RIGHT SIDE: KREDIT (K) */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-yellow-400 text-slate-900 font-black text-center py-2 text-xs uppercase tracking-wider border-b border-slate-200">
+                    REALISASI (KREDIT / SETORAN & RETUR)
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-[11px] font-sans text-slate-850">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-center">
+                          <th className="py-2.5 px-2 border-r border-slate-200">TGL / BLN</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200 w-12 text-right">QTY</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200 text-right">HARGA</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200 text-right">JUMLAH</th>
+                          <th className="py-2.5 px-2 border-r border-slate-200">KETERANGAN</th>
+                          <th className="py-2.5 px-2">NOTED</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {ledgerHistoryData.creditList.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-slate-400 italic">
+                              Belum ada realisasi setoran atau retur untuk produk ini.
+                            </td>
+                          </tr>
+                        ) : (
+                          ledgerHistoryData.creditList.map((item, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50 text-center">
+                              <td className="py-2 px-2 border-r border-slate-200 text-slate-600 font-mono">
+                                {new Date(item.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
+                              </td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-900">{item.quantity}</td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-right text-slate-500">{formatRupiah(item.price)}</td>
+                              <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-800">{formatRupiah(item.total)}</td>
+                              <td className="py-2 px-2 border-r border-slate-200">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                  item.type === TransactionType.RETURN 
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-100' 
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                }`}>
+                                  {item.type === TransactionType.RETURN ? 'Retur' : 'Setor'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 text-left text-slate-500 truncate max-w-[120px]" title={item.notes}>{item.notes}</td>
+                            </tr>
+                          ))
+                        )}
+                        {/* Empty rows to mimic spreadsheet feel (min 3 rows) */}
+                        {ledgerHistoryData.creditList.length < 3 && 
+                          Array.from({ length: 3 - ledgerHistoryData.creditList.length }).map((_, i) => (
+                            <tr key={`empty-credit-${i}`} className="h-8">
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td className="border-r border-slate-200"></td>
+                              <td></td>
+                            </tr>
+                          ))
+                        }
+                        {/* Total Row */}
+                        <tr className="bg-yellow-100 font-bold border-t-2 border-slate-300 text-center">
+                          <td className="py-2 px-2 text-right border-r border-slate-200">TOTAL REKONSILIASI (K):</td>
+                          <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-900">{ledgerHistoryData.totalCreditQty}</td>
+                          <td className="py-2 px-2 border-r border-slate-200"></td>
+                          <td className="py-2 px-2 text-right border-r border-slate-200 text-emerald-750 font-mono">{formatRupiah(ledgerHistoryData.totalCreditAmount)}</td>
+                          <td className="py-2 px-2 border-r border-slate-200"></td>
+                          <td className="py-2 px-2 text-center text-white text-[10px]">
+                            {ledgerHistoryData.balance > 0 ? (
+                              <span className="bg-rose-600 px-2 py-1 rounded font-black block font-mono">
+                                ({formatRupiah(ledgerHistoryData.balance)})
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-600 px-2 py-1 rounded font-black block">
+                                -
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Bottom Meta Boxes (Pending Bayar & Perbandingan Ratio) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 font-sans text-white">
+                <div className="flex items-center justify-between bg-emerald-500 p-3.5 rounded-xl border border-emerald-600 shadow-sm">
+                  <span className="text-xs font-bold uppercase tracking-wider">Pending Bayar (Sisa Selisih)</span>
+                  <span className="font-mono font-black text-sm">
+                    {ledgerHistoryData.balance > 0 ? formatRupiah(ledgerHistoryData.balance) : '-'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between bg-emerald-500 p-3.5 rounded-xl border border-emerald-600 shadow-sm">
+                  <div className="flex items-center gap-6">
+                    <div className="text-center border-r border-emerald-400/50 pr-4">
+                      <span className="text-[9px] block text-emerald-100 uppercase font-bold">AR (Ambil)</span>
+                      <span className="text-sm font-black font-mono">{ledgerPerbandinganLabel.ar}</span>
+                    </div>
+                    <div className="text-center">
+                      <span className="text-[9px] block text-emerald-100 uppercase font-bold">SETOR (Realisasi)</span>
+                      <span className="text-sm font-black font-mono">{ledgerPerbandinganLabel.setor}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] text-emerald-100 uppercase block font-bold">PERBANDINGAN</span>
+                    <span className="text-sm font-black bg-emerald-600/60 px-2.5 py-0.5 rounded-lg border border-emerald-400/40 font-mono">
+                      {ledgerPerbandinganLabel.ar} : {ledgerPerbandinganLabel.setor}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-400 text-xs">
+              Pilih staff dan produk terlebih dahulu untuk memuat buku pembantu.
+            </div>
+          )}
+        </div>
+      ) : (
         /* ACCESS AND USER CREDENTIALS MANAGEMENT PANEL */
         <div className="space-y-6 animate-fade-in" id="access-management-panel">
           {/* Controls Bar */}
@@ -1011,172 +1413,8 @@ export default function ManagerDashboard({
             </div>
           </div>
         </div>
-      ) : (
-        /* DATABASE SYNC PANEL WITH BEAUTIFUL USER TUTORIAL */
-        <div className="space-y-6 animate-fade-in" id="database-sync-panel">
-          {/* Header Card */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex gap-4 items-start">
-                <div className={`p-3 rounded-2xl border shrink-0 ${
-                  isFirebaseConfigured && firebaseActive 
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                    : 'bg-amber-50 text-amber-600 border-amber-100'
-                }`}>
-                  <Database className="h-6 w-6" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900">Sinkronisasi Cloud Database (Firebase Firestore)</h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Hubungkan aplikasi Anda ke cloud database agar data produk, transaksi, dan akses pengguna sinkron secara terpusat di semua PC, HP, dan browser secara real-time.
-                  </p>
-                </div>
-              </div>
-              <div className="shrink-0">
-                {isFirebaseConfigured && firebaseActive ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-150 rounded-xl text-xs font-bold font-mono">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    TERHUBUNG & SINKRON
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-150 rounded-xl text-xs font-bold font-mono">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    MODE OFFLINE (LOKAL)
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Warning / Success Banner */}
-            {!(isFirebaseConfigured && firebaseActive) ? (
-              <div className="mt-5 p-4 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs text-amber-800 space-y-2">
-                <div className="flex gap-2 items-start">
-                  <AlertTriangle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold">Mengapa produk yang Anda delete atau tambahkan masih muncul di PC/browser lain?</p>
-                    <p className="mt-1 leading-relaxed text-amber-700 font-medium">
-                      Saat ini, aplikasi berjalan dalam <strong>Mode Offline (LocalStorage)</strong>. Di mode ini, data disimpan secara lokal pada memori browser masing-masing PC. Jika Anda mengedit data di PC A, data di PC B tidak akan terupdate karena belum terhubung ke database cloud yang sama.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-5 p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-xs text-emerald-800 space-y-2">
-                <div className="flex gap-2 items-start">
-                  <Check className="h-4.5 w-4.5 text-emerald-600 shrink-0 mt-0.5 bg-emerald-100 p-0.5 rounded-full" />
-                  <div>
-                    <p className="font-bold">Koneksi Cloud Firestore Aktif!</p>
-                    <p className="mt-1 leading-relaxed text-emerald-700 font-medium">
-                      Setiap perubahan data (seperti menambah produk baru, mengedit transaksi, mendaftarkan staff, atau menghapus item) akan langsung disimpan ke cloud dan terupdate di semua perangkat lain seketika (real-time).
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Configuration Guide */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Step by step */}
-            <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-3">
-                <HelpCircle className="h-4.5 w-4.5 text-indigo-500" />
-                <span>Panduan Langkah Menghubungkan Cloud Firestore</span>
-              </h3>
-
-              <div className="space-y-4.5 text-xs text-slate-600">
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">1</div>
-                  <div>
-                    <p className="font-bold text-slate-850">Buat Proyek di Firebase Console</p>
-                    <p className="mt-0.5 text-slate-500 leading-relaxed">
-                      Buka <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" className="text-indigo-600 font-semibold hover:underline">Firebase Console</a>, buat proyek baru (misal: "Sistem MOP Distribusi"), atau pilih proyek yang sudah ada.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">2</div>
-                  <div>
-                    <p className="font-bold text-slate-850">Aktifkan Database Cloud Firestore</p>
-                    <p className="mt-0.5 text-slate-500 leading-relaxed">
-                      Masuk ke menu <strong>Firestore Database</strong> di sidebar Firebase, klik <strong>Create Database</strong>. Pilih lokasi server terdekat (misalnya <i>asia-southeast1</i> untuk Singapura/Indonesia) dan aktifkan dalam mode pengujian (Test Mode) atau gunakan file aturan keamanan <code>firestore.rules</code> yang telah kami siapkan di direktori utama proyek Anda.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">3</div>
-                  <div>
-                    <p className="font-bold text-slate-850">Buat Web App & Salin Konfigurasi SDK</p>
-                    <p className="mt-0.5 text-slate-500 leading-relaxed">
-                      Di halaman ringkasan proyek (Project Overview), klik ikon web <strong>(&lt;/&gt;)</strong> untuk menambahkan aplikasi web baru. Salin bagian objek konfigurasi Firebase (Firebase SDK Configuration) yang berisi parameter seperti <code>apiKey</code>, <code>projectId</code>, dll.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs border border-indigo-150 shrink-0">4</div>
-                  <div>
-                    <p className="font-bold text-slate-850">Masukkan Kunci ke Menu "Settings" AI Studio</p>
-                    <p className="mt-0.5 text-slate-500 leading-relaxed">
-                      Buka panel <strong>Settings</strong> atau <strong>Secrets</strong> di pojok kanan atas aplikasi AI Studio build Anda ini, lalu tambahkan Environment Variables / Secrets baru dengan nama-nama berikut sesuai dengan nilai konfigurasi Firebase Anda:
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Environment Keys Box */}
-            <div className="lg:col-span-5 bg-slate-900 text-slate-200 p-6 rounded-2xl border border-slate-800/80 shadow-lg flex flex-col justify-between">
-              <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-indigo-300 flex items-center gap-1.5 border-b border-slate-800 pb-3 mb-4">
-                  <Settings className="h-4 w-4" />
-                  <span>Daftar Parameter yang Harus Diisi</span>
-                </h3>
-
-                <p className="text-[10px] text-slate-400 leading-relaxed mb-4">
-                  Pastikan Anda memasukkan variabel-variabel ini dengan tepat di menu Settings aplikasi agar Firebase aktif secara otomatis:
-                </p>
-
-                <div className="space-y-3 font-mono text-[10px]">
-                  <div>
-                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_API_KEY</span>
-                    <span className="text-slate-500 block text-[9px] -mt-0.5">apiKey dari Firebase config</span>
-                  </div>
-                  <div>
-                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_AUTH_DOMAIN</span>
-                    <span className="text-slate-500 block text-[9px] -mt-0.5">authDomain dari Firebase config</span>
-                  </div>
-                  <div>
-                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_PROJECT_ID</span>
-                    <span className="text-slate-500 block text-[9px] -mt-0.5">projectId dari Firebase config</span>
-                  </div>
-                  <div>
-                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_STORAGE_BUCKET</span>
-                    <span className="text-slate-500 block text-[9px] -mt-0.5">storageBucket dari Firebase config</span>
-                  </div>
-                  <div>
-                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_MESSAGING_SENDER_ID</span>
-                    <span className="text-slate-500 block text-[9px] -mt-0.5">messagingSenderId dari Firebase config</span>
-                  </div>
-                  <div>
-                    <span className="text-pink-400 block font-bold">VITE_FIREBASE_APP_ID</span>
-                    <span className="text-slate-500 block text-[9px] -mt-0.5">appId dari Firebase config</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-800 pt-4 mt-5">
-                <p className="text-[10px] text-slate-400 leading-relaxed flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></span>
-                  <span><strong>Info Seeding Otomatis:</strong> Saat pertama kali Firebase tersambung, aplikasi akan menyalin data lokal Anda saat ini ke cloud database secara otomatis, sehingga Anda tidak kehilangan data awal.</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
+
 
       {/* MODAL WINDOW FOR ADDING AND EDITING USERS */}
       {isUserModalOpen && (

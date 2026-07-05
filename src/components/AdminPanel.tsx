@@ -581,7 +581,7 @@ export default function AdminPanel({
       });
 
       let transactionDate = new Date().toISOString();
-      if (selectedTxType === TransactionType.INTAKE && txDate) {
+      if ((selectedTxType === TransactionType.INTAKE || selectedTxType === TransactionType.RETURN) && txDate) {
         try {
           const parsed = new Date(txDate);
           const now = new Date();
@@ -941,11 +941,11 @@ export default function AdminPanel({
                   </div>
                 </div>
 
-                {/* 2b. Tanggal untuk Bawa Produk / Setor Uang */}
-                {(selectedTxType === TransactionType.INTAKE || selectedTxType === TransactionType.DEPOSIT) && (
+                {/* 2b. Tanggal untuk Bawa Produk / Setor Uang / Retur */}
+                {(selectedTxType === TransactionType.INTAKE || selectedTxType === TransactionType.DEPOSIT || selectedTxType === TransactionType.RETURN) && (
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                      {selectedTxType === TransactionType.INTAKE ? 'Tanggal Bawa Produk' : 'Tanggal Setoran'}
+                      {selectedTxType === TransactionType.INTAKE ? 'Tanggal Bawa Produk' : selectedTxType === TransactionType.DEPOSIT ? 'Tanggal Setoran' : 'Tanggal Retur'}
                     </label>
                     <input
                       type="date"
@@ -954,7 +954,9 @@ export default function AdminPanel({
                       className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 transition-all font-semibold font-mono ${
                         selectedTxType === TransactionType.INTAKE 
                           ? 'focus:ring-indigo-500/10 focus:border-indigo-500' 
-                          : 'focus:ring-emerald-500/10 focus:border-emerald-500'
+                          : selectedTxType === TransactionType.DEPOSIT
+                          ? 'focus:ring-emerald-500/10 focus:border-emerald-500'
+                          : 'focus:ring-blue-500/10 focus:border-blue-500'
                       }`}
                       id="tx-custom-date-input"
                       required
