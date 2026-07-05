@@ -23,10 +23,9 @@
         "stock": { "type": "number" },
         "price": { "type": "number" },
         "unit": { "type": "string" },
-        "expiryDate": { "type": "string" },
-        "image": { "type": "string" }
+        "expiryDate": { "type": "string" }
       },
-      "required": ["id", "name", "stock", "price", "unit", "expiryDate", "image"]
+      "required": ["id", "name", "stock", "price", "unit", "expiryDate"]
     },
     "Transaction": {
       "title": "Transaction",
@@ -36,13 +35,15 @@
         "id": { "type": "string" },
         "staffId": { "type": "string" },
         "staffName": { "type": "string" },
+        "adminId": { "type": "string" },
+        "adminName": { "type": "string" },
         "type": { "type": "string", "enum": ["intake", "deposit", "return"] },
         "date": { "type": "string" },
         "amount": { "type": "number" },
         "notes": { "type": "string" },
         "items": { "type": "array" }
       },
-      "required": ["id", "staffId", "staffName", "type", "date"]
+      "required": ["id", "staffId", "staffName", "adminId", "adminName", "type", "date"]
     }
   },
   "firestore": {

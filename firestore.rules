@@ -32,14 +32,15 @@ service cloud.firestore {
         && data.stock is number
         && data.price is number
         && data.unit is string && data.unit.size() <= 50
-        && data.expiryDate is string && data.expiryDate.size() <= 50
-        && data.image is string && data.image.size() <= 2048;
+        && data.expiryDate is string && data.expiryDate.size() <= 50;
     }
     
     function isValidTransaction(data) {
       return data.id is string && data.id.size() <= 128
         && data.staffId is string && data.staffId.size() <= 128
         && data.staffName is string && data.staffName.size() <= 200
+        && data.adminId is string && data.adminId.size() <= 128
+        && data.adminName is string && data.adminName.size() <= 200
         && data.type is string && (data.type == 'intake' || data.type == 'deposit' || data.type == 'return')
         && data.date is string && data.date.size() <= 50
         && (!('amount' in data) || data.amount is number)
@@ -63,6 +64,10 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isValidId(transactionId) && isValidTransaction(incoming());
       allow delete: if isValidId(transactionId);
+    }
+
+    match /test/{docId} {
+      allow read: if true;
     }
   }
 }
