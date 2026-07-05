@@ -11,6 +11,50 @@ import {
 } from "firebase/firestore";
 import { Product, Transaction, User } from "../types";
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: null,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 // Firebase configuration from environment variables
 const firebaseConfig = {
   apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY,
@@ -58,104 +102,105 @@ export async function testConnection(): Promise<boolean> {
 // Fetch all products
 export async function getProductsFromFirebase(): Promise<Product[] | null> {
   if (!db) return null;
+  const path = "products";
   try {
-    const querySnapshot = await getDocs(collection(db, "products"));
+    const querySnapshot = await getDocs(collection(db, path));
     const productsList: Product[] = [];
     querySnapshot.forEach((document) => {
       productsList.push(document.data() as Product);
     });
     return productsList;
   } catch (error) {
-    console.error("Error fetching products from Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.GET, path);
   }
 }
 
 // Fetch all transactions
 export async function getTransactionsFromFirebase(): Promise<Transaction[] | null> {
   if (!db) return null;
+  const path = "transactions";
   try {
-    const querySnapshot = await getDocs(collection(db, "transactions"));
-    const transactionsList: Transaction[] = [];
+    const querySnapshot = await getDocs(collection(db, path));
+    const transactionsList: Product[] = []; // Reuse list build but cast as Transaction
+    const list: Transaction[] = [];
     querySnapshot.forEach((document) => {
-      transactionsList.push(document.data() as Transaction);
+      list.push(document.data() as Transaction);
     });
     // Sort transactions by date descending (newest first)
-    return transactionsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   } catch (error) {
-    console.error("Error fetching transactions from Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.GET, path);
   }
 }
 
 // Fetch all users
 export async function getUsersFromFirebase(): Promise<User[] | null> {
   if (!db) return null;
+  const path = "users";
   try {
-    const querySnapshot = await getDocs(collection(db, "users"));
+    const querySnapshot = await getDocs(collection(db, path));
     const usersList: User[] = [];
     querySnapshot.forEach((document) => {
       usersList.push(document.data() as User);
     });
     return usersList;
   } catch (error) {
-    console.error("Error fetching users from Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.GET, path);
   }
 }
 
 // Save or Update a single product
 export async function saveProductToFirebase(product: Product): Promise<void> {
   if (!db) return;
+  const path = `products/${product.id}`;
   try {
     await setDoc(doc(db, "products", product.id), product);
   } catch (error) {
-    console.error("Error saving product to Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
 // Delete a product
 export async function deleteProductFromFirebase(productId: string): Promise<void> {
   if (!db) return;
+  const path = `products/${productId}`;
   try {
     await deleteDoc(doc(db, "products", productId));
   } catch (error) {
-    console.error("Error deleting product from Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
 // Save a single transaction
 export async function saveTransactionToFirebase(transaction: Transaction): Promise<void> {
   if (!db) return;
+  const path = `transactions/${transaction.id}`;
   try {
     await setDoc(doc(db, "transactions", transaction.id), transaction);
   } catch (error) {
-    console.error("Error saving transaction to Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
 // Save or Update a single user (Access Management)
 export async function saveUserToFirebase(user: User): Promise<void> {
   if (!db) return;
+  const path = `users/${user.id}`;
   try {
     await setDoc(doc(db, "users", user.id), user);
   } catch (error) {
-    console.error("Error saving user to Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
 
 // Delete a user
 export async function deleteUserFromFirebase(userId: string): Promise<void> {
   if (!db) return;
+  const path = `users/${userId}`;
   try {
     await deleteDoc(doc(db, "users", userId));
   } catch (error) {
-    console.error("Error deleting user from Firebase:", error);
-    throw error;
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
