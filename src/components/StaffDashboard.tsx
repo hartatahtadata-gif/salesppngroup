@@ -30,6 +30,7 @@ export default function StaffDashboard({
 
   const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(new Date().getMonth() + 1); // 1-12 or 'all'
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedLedgerProductId, setSelectedLedgerProductId] = useState<string>('');
 
   const IndonesianMonths = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -225,6 +226,121 @@ export default function StaffDashboard({
   const totalCarriedValue = useMemo(() => {
     return carriedProducts.reduce((acc, p) => acc + p.totalValue, 0);
   }, [carriedProducts]);
+
+  // Active selected product for ledger (defaults to first product in list if none selected)
+  const activeLedgerProductId = selectedLedgerProductId || (products.length > 0 ? products[0].id : '');
+  const activeLedgerProduct = products.find(p => p.id === activeLedgerProductId);
+
+  const productHistoryData = useMemo(() => {
+    if (!activeLedgerProductId) {
+      return { 
+        debitList: [], 
+        creditList: [], 
+        totalDebitQty: 0, 
+        totalDebitAmount: 0, 
+        totalCreditQty: 0, 
+        totalCreditAmount: 0, 
+        balance: 0 
+      };
+    }
+
+    const debitList: Array<{
+      id: string;
+      date: string;
+      adminName: string;
+      quantity: number;
+      price: number;
+      total: number;
+      notes: string;
+    }> = [];
+
+    const creditList: Array<{
+      id: string;
+      date: string;
+      type: TransactionType;
+      quantity: number;
+      price: number;
+      total: number;
+      notes: string;
+    }> = [];
+
+    // Sort personal transactions by date ascending (oldest first to build running ledger)
+    const sortedTxs = [...personalTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    sortedTxs.forEach(tx => {
+      if (tx.type === TransactionType.INTAKE && tx.items) {
+        const item = tx.items.find(it => it.productId === activeLedgerProductId);
+        if (item) {
+          debitList.push({
+            id: tx.id,
+            date: tx.date,
+            adminName: tx.adminName,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            notes: tx.notes || ''
+          });
+        }
+      } else if (tx.type === TransactionType.RETURN && tx.items) {
+        const item = tx.items.find(it => it.productId === activeLedgerProductId);
+        if (item) {
+          creditList.push({
+            id: tx.id,
+            date: tx.date,
+            type: TransactionType.RETURN,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            notes: tx.notes || 'Retur Barang'
+          });
+        }
+      } else if (tx.type === TransactionType.DEPOSIT && tx.items) {
+        const item = tx.items.find(it => it.productId === activeLedgerProductId);
+        if (item) {
+          creditList.push({
+            id: tx.id,
+            date: tx.date,
+            type: TransactionType.DEPOSIT,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            notes: tx.notes || 'Setoran Tunai'
+          });
+        }
+      }
+    });
+
+    const totalDebitQty = debitList.reduce((sum, item) => sum + item.quantity, 0);
+    const totalDebitAmount = debitList.reduce((sum, item) => sum + item.total, 0);
+
+    const totalCreditQty = creditList.reduce((sum, item) => sum + item.quantity, 0);
+    const totalCreditAmount = creditList.reduce((sum, item) => sum + item.total, 0);
+
+    const balance = totalDebitAmount - totalCreditAmount;
+
+    return {
+      debitList,
+      creditList,
+      totalDebitQty,
+      totalDebitAmount,
+      totalCreditQty,
+      totalCreditAmount,
+      balance
+    };
+  }, [personalTransactions, activeLedgerProductId]);
+
+  const perbandinganLabel = useMemo(() => {
+    const { totalDebitQty, totalCreditQty } = productHistoryData;
+    if (totalDebitQty === 0 && totalCreditQty === 0) return { ar: 0, setor: 0 };
+    const gcd = (a: number, b: number): number => {
+      return b === 0 ? a : gcd(b, a % b);
+    };
+    const divisor = gcd(totalDebitQty, totalCreditQty) || 1;
+    return {
+      ar: totalDebitQty / divisor,
+      setor: totalCreditQty / divisor
+    };
+  }, [productHistoryData]);
 
   return (
     <div className="space-y-6 animate-fade-in" id="staff-dashboard-view">
@@ -473,6 +589,252 @@ export default function StaffDashboard({
           </div>
         </div>
 
+      </div>
+
+      {/* Product Ledger Section (Laporan Per Produk) as requested */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6" id="product-ledger-section">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-amber-500" />
+              Laporan & Buku Pembantu Per Produk
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Pilih produk di bawah untuk melihat rincian riwayat pengambilan (Distribusi) vs penyelesaian (Setoran & Retur).
+            </p>
+          </div>
+          
+          <div className="w-full sm:w-auto flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-400 whitespace-nowrap font-sans">Filter Produk:</span>
+            <div className="relative w-full sm:w-64">
+              <select
+                value={activeLedgerProductId}
+                onChange={(e) => setSelectedLedgerProductId(e.target.value)}
+                className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3.5 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer pr-10 font-sans"
+                id="ledger-product-selector"
+              >
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.id})
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                <ChevronDown className="h-4 w-4" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {activeLedgerProduct ? (
+          <div className="space-y-6">
+            {/* Product Header */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <span className="text-[9px] bg-amber-200/60 text-amber-800 font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
+                  Produk Terpilih
+                </span>
+                <h3 className="text-base font-black text-slate-900 mt-1">{activeLedgerProduct.name}</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Satuan: <span className="font-bold">{activeLedgerProduct.unit}</span> • Harga Satuan Default: <span className="font-bold">{formatRupiah(activeLedgerProduct.price)}</span></p>
+              </div>
+              <div className="text-left sm:text-right">
+                <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Sisa Kewajiban Produk Ini</span>
+                <span className={`text-lg font-black block mt-0.5 ${productHistoryData.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  {productHistoryData.balance > 0 ? formatRupiah(productHistoryData.balance) : 'LUNAS / TIDAK ADA TAGIHAN'}
+                </span>
+              </div>
+            </div>
+
+            {/* Split Tables Container */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              
+              {/* LEFT SIDE: DISTRIBUSI (D) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-yellow-400 text-slate-900 font-black text-center py-2 text-xs uppercase tracking-wider border-b border-slate-200">
+                  DISTRIBUSI (DEBIT / AMBIL)
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-center">
+                        <th className="py-2.5 px-2 border-r border-slate-200 w-10">NO</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200">TGL / BLN</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200">DISTRIBUTOR</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200 w-12 text-right">QTY</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200 text-right">HARGA</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200 text-right">JUMLAH</th>
+                        <th className="py-2.5 px-2">KETERANGAN</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {productHistoryData.debitList.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-400 italic">
+                            Tidak ada data pengambilan untuk produk ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        productHistoryData.debitList.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 text-center">
+                            <td className="py-2 px-2 border-r border-slate-200 font-medium text-slate-400">{idx + 1}</td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-slate-600 font-mono">
+                              {new Date(item.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
+                            </td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-slate-800 text-left font-semibold truncate max-w-[100px]">{item.adminName}</td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-900">{item.quantity}</td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-right text-slate-500">{formatRupiah(item.price)}</td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-800">{formatRupiah(item.total)}</td>
+                            <td className="py-2 px-2 text-left text-slate-500 truncate max-w-[120px]" title={item.notes}>{item.notes || '-'}</td>
+                          </tr>
+                        ))
+                      )}
+                      {/* Empty rows to mimic spreadsheet feel (min 3 rows) */}
+                      {productHistoryData.debitList.length < 3 && 
+                        Array.from({ length: 3 - productHistoryData.debitList.length }).map((_, i) => (
+                          <tr key={`empty-debit-${i}`} className="h-8">
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td></td>
+                          </tr>
+                        ))
+                      }
+                      {/* Total Row */}
+                      <tr className="bg-yellow-100 font-bold border-t-2 border-slate-300 text-center">
+                        <td colSpan={3} className="py-2 px-2 text-right border-r border-slate-200">TOTAL DISTRIBUSI (D):</td>
+                        <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-900">{productHistoryData.totalDebitQty}</td>
+                        <td className="py-2 px-2 border-r border-slate-200"></td>
+                        <td className="py-2 px-2 text-right border-r border-slate-200 text-indigo-750">{formatRupiah(productHistoryData.totalDebitAmount)}</td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* RIGHT SIDE: KREDIT (K) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-yellow-400 text-slate-900 font-black text-center py-2 text-xs uppercase tracking-wider border-b border-slate-200">
+                  REALISASI (KREDIT / SETORAN & RETUR)
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-center">
+                        <th className="py-2.5 px-2 border-r border-slate-200">TGL / BLN</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200 w-12 text-right">QTY</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200 text-right">HARGA</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200 text-right">JUMLAH</th>
+                        <th className="py-2.5 px-2 border-r border-slate-200">KETERANGAN</th>
+                        <th className="py-2.5 px-2">NOTED</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {productHistoryData.creditList.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400 italic">
+                            Belum ada realisasi setoran atau retur untuk produk ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        productHistoryData.creditList.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 text-center">
+                            <td className="py-2 px-2 border-r border-slate-200 text-slate-600 font-mono">
+                              {new Date(item.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-')}
+                            </td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-900">{item.quantity}</td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-right text-slate-500">{formatRupiah(item.price)}</td>
+                            <td className="py-2 px-2 border-r border-slate-200 text-right font-bold text-slate-800">{formatRupiah(item.total)}</td>
+                            <td className="py-2 px-2 border-r border-slate-200">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                item.type === TransactionType.RETURN 
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-100' 
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              }`}>
+                                {item.type === TransactionType.RETURN ? 'Retur' : 'Setor'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-left text-slate-500 truncate max-w-[120px]" title={item.notes}>{item.notes}</td>
+                          </tr>
+                        ))
+                      )}
+                      {/* Empty rows to mimic spreadsheet feel (min 3 rows) */}
+                      {productHistoryData.creditList.length < 3 && 
+                        Array.from({ length: 3 - productHistoryData.creditList.length }).map((_, i) => (
+                          <tr key={`empty-credit-${i}`} className="h-8">
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td className="border-r border-slate-200"></td>
+                            <td></td>
+                          </tr>
+                        ))
+                      }
+                      {/* Total Row */}
+                      <tr className="bg-yellow-100 font-bold border-t-2 border-slate-300 text-center">
+                        <td className="py-2 px-2 text-right border-r border-slate-200">TOTAL REKONSILIASI (K):</td>
+                        <td className="py-2 px-2 text-right border-r border-slate-200 text-slate-900">{productHistoryData.totalCreditQty}</td>
+                        <td className="py-2 px-2 border-r border-slate-200"></td>
+                        <td className="py-2 px-2 text-right border-r border-slate-200 text-emerald-750">{formatRupiah(productHistoryData.totalCreditAmount)}</td>
+                        <td className="py-2 px-2 border-r border-slate-200"></td>
+                        <td className="py-2 px-2 text-center text-white text-[10px]">
+                          {productHistoryData.balance > 0 ? (
+                            <span className="bg-rose-600 px-2 py-1 rounded font-black block">
+                              ({formatRupiah(productHistoryData.balance)})
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-600 px-2 py-1 rounded font-black block">
+                              -
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Bottom Meta Boxes (Pending Bayar & Perbandingan Ratio) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 font-sans">
+              <div className="flex items-center justify-between bg-emerald-500 text-white p-3.5 rounded-xl border border-emerald-600 shadow-sm">
+                <span className="text-xs font-bold uppercase tracking-wider">Pending Bayar (Sisa Selisih)</span>
+                <span className="font-mono font-black text-sm">
+                  {productHistoryData.balance > 0 ? formatRupiah(productHistoryData.balance) : '-'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between bg-emerald-500 text-white p-3.5 rounded-xl border border-emerald-600 shadow-sm">
+                <div className="flex items-center gap-6">
+                  <div className="text-center border-r border-emerald-400/50 pr-4">
+                    <span className="text-[9px] block text-emerald-100 uppercase font-bold">AR (Ambil)</span>
+                    <span className="text-sm font-black">{perbandinganLabel.ar}</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-[9px] block text-emerald-100 uppercase font-bold">SETOR (Realisasi)</span>
+                    <span className="text-sm font-black">{perbandinganLabel.setor}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] text-emerald-100 uppercase block font-bold">PERBANDINGAN</span>
+                  <span className="text-sm font-black bg-emerald-600/60 px-2.5 py-0.5 rounded-lg border border-emerald-400/40">
+                    {perbandinganLabel.ar} : {perbandinganLabel.setor}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        ) : (
+          <div className="text-center py-12 text-slate-400 text-xs">
+            Tidak ada data produk yang tersedia.
+          </div>
+        )}
       </div>
 
     </div>
