@@ -13,7 +13,8 @@ import {
   UserCheck, 
   Calendar,
   Layers,
-  AlertCircle
+  AlertCircle,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -41,7 +42,7 @@ export default function AdminPanel({
   onEditTransaction
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'products' | 'record' | 'history'>('products');
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
+  const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(new Date().getMonth() + 1); // 1-12 or 'all'
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const IndonesianMonths = [
@@ -49,14 +50,58 @@ export default function AdminPanel({
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
 
-  const yearsList = useMemo(() => {
-    const years = new Set<number>();
-    years.add(new Date().getFullYear());
-    transactions.forEach(tx => {
-      years.add(new Date(tx.date).getFullYear());
+  const availableMonths = useMemo(() => {
+    const map = new Map<string, { month: number; year: number }>();
+    
+    // Sort transactions by date descending
+    const sortedTxs = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    sortedTxs.forEach(tx => {
+      const d = new Date(tx.date);
+      const m = d.getMonth() + 1; // 1-12
+      const y = d.getFullYear();
+      const key = `${m}-${y}`;
+      if (!map.has(key)) {
+        map.set(key, { month: m, year: y });
+      }
     });
-    return Array.from(years).sort((a, b) => b - a);
+
+    // Make sure current month is always present
+    const curM = new Date().getMonth() + 1;
+    const curY = new Date().getFullYear();
+    const curKey = `${curM}-${curY}`;
+    if (!map.has(curKey)) {
+      map.set(curKey, { month: curM, year: curY });
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return b.month - a.month;
+      })
+      .map(item => ({
+        key: `${item.month}-${item.year}`,
+        month: item.month,
+        year: item.year,
+        label: `${IndonesianMonths[item.month - 1]} ${item.year}`
+      }));
   }, [transactions]);
+
+  const handleMonthYearChange = (val: string) => {
+    if (val === 'all') {
+      setSelectedMonth('all');
+    } else {
+      const [m, y] = val.split('-').map(Number);
+      setSelectedMonth(m);
+      setSelectedYear(y);
+    }
+  };
+
+  const selectedMonthYearKey = selectedMonth === 'all' ? 'all' : `${selectedMonth}-${selectedYear}`;
+  const selectedMonthYearLabel = useMemo(() => {
+    if (selectedMonth === 'all') return 'Semua Bulan';
+    return `${IndonesianMonths[(selectedMonth as number) - 1]} ${selectedYear}`;
+  }, [selectedMonth, selectedYear]);
 
   const [productSearch, setProductSearch] = useState('');
   const [historySearch, setHistorySearch] = useState('');
@@ -509,8 +554,8 @@ export default function AdminPanel({
       const matchType = txTypeFilter === 'all' || tx.type === txTypeFilter;
 
       const txDate = new Date(tx.date);
-      const matchMonth = txDate.getMonth() + 1 === selectedMonth;
-      const matchYear = txDate.getFullYear() === selectedYear;
+      const matchMonth = selectedMonth === 'all' || txDate.getMonth() + 1 === selectedMonth;
+      const matchYear = selectedMonth === 'all' || txDate.getFullYear() === selectedYear;
 
       return matchSearch && matchType && matchMonth && matchYear;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -529,29 +574,28 @@ export default function AdminPanel({
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto">
           {/* Month & Year Selectors */}
-          <div className="flex items-center gap-2 shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-200/60 justify-center">
-            <Calendar className="h-4 w-4 text-slate-400 mr-1 ml-1 animate-pulse" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-100 font-medium cursor-pointer"
-              id="admin-month-select"
-            >
-              {IndonesianMonths.map((m, idx) => (
-                <option key={m} value={idx + 1}>{m}</option>
-              ))}
-            </select>
-
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-100 font-medium cursor-pointer"
-              id="admin-year-select"
-            >
-              {yearsList.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+          <div className="flex items-center bg-slate-100/80 border border-slate-200/80 rounded-full overflow-hidden p-1 pr-1.5 shadow-sm max-w-[280px] self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 px-2.5 text-slate-500">
+              <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">Bulan Laporan:</span>
+            </div>
+            <div className="relative bg-white rounded-full border border-slate-100 shadow-inner px-3 py-1 flex items-center gap-1.5 min-w-[125px] justify-between">
+              <select
+                value={selectedMonthYearKey}
+                onChange={(e) => handleMonthYearChange(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                id="admin-month-year-select"
+              >
+                <option value="all">Semua Bulan</option>
+                {availableMonths.map(item => (
+                  <option key={item.key} value={item.key}>{item.label}</option>
+                ))}
+              </select>
+              <span className="text-[10px] font-extrabold text-slate-800 truncate max-w-[100px]">
+                {selectedMonthYearLabel}
+              </span>
+              <ChevronDown className="h-3 w-3 text-slate-400 pointer-events-none" />
+            </div>
           </div>
 
           {/* Tab Selector */}

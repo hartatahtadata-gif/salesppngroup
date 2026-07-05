@@ -44,7 +44,8 @@ import {
   CloudOff,
   Database,
   HelpCircle,
-  RefreshCw
+  RefreshCw,
+  ChevronDown
 } from 'lucide-react';
 
 interface ManagerDashboardProps {
@@ -70,7 +71,7 @@ export default function ManagerDashboard({
   const [activeTab, setActiveTab] = useState<'analytics' | 'access' | 'database'>('analytics');
 
   // Month & Year state
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
+  const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(new Date().getMonth() + 1); // 1-12 or 'all'
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   // User list searching / filtering
@@ -96,14 +97,58 @@ export default function ManagerDashboard({
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
 
-  const yearsList = useMemo(() => {
-    const years = new Set<number>();
-    years.add(new Date().getFullYear());
-    transactions.forEach(tx => {
-      years.add(new Date(tx.date).getFullYear());
+  const availableMonths = useMemo(() => {
+    const map = new Map<string, { month: number; year: number }>();
+    
+    // Sort transactions by date descending
+    const sortedTxs = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    sortedTxs.forEach(tx => {
+      const d = new Date(tx.date);
+      const m = d.getMonth() + 1; // 1-12
+      const y = d.getFullYear();
+      const key = `${m}-${y}`;
+      if (!map.has(key)) {
+        map.set(key, { month: m, year: y });
+      }
     });
-    return Array.from(years).sort((a, b) => b - a);
+
+    // Make sure current month is always present
+    const curM = new Date().getMonth() + 1;
+    const curY = new Date().getFullYear();
+    const curKey = `${curM}-${curY}`;
+    if (!map.has(curKey)) {
+      map.set(curKey, { month: curM, year: curY });
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return b.month - a.month;
+      })
+      .map(item => ({
+        key: `${item.month}-${item.year}`,
+        month: item.month,
+        year: item.year,
+        label: `${IndonesianMonths[item.month - 1]} ${item.year}`
+      }));
   }, [transactions]);
+
+  const handleMonthYearChange = (val: string) => {
+    if (val === 'all') {
+      setSelectedMonth('all');
+    } else {
+      const [m, y] = val.split('-').map(Number);
+      setSelectedMonth(m);
+      setSelectedYear(y);
+    }
+  };
+
+  const selectedMonthYearKey = selectedMonth === 'all' ? 'all' : `${selectedMonth}-${selectedYear}`;
+  const selectedMonthYearLabel = useMemo(() => {
+    if (selectedMonth === 'all') return 'Semua Bulan';
+    return `${IndonesianMonths[(selectedMonth as number) - 1]} ${selectedYear}`;
+  }, [selectedMonth, selectedYear]);
 
   // Format IDR Helper
   const formatRupiah = (value: number) => {
@@ -118,7 +163,9 @@ export default function ManagerDashboard({
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
       const txDate = new Date(tx.date);
-      return txDate.getMonth() + 1 === selectedMonth && txDate.getFullYear() === selectedYear;
+      const matchMonth = selectedMonth === 'all' || txDate.getMonth() + 1 === selectedMonth;
+      const matchYear = selectedMonth === 'all' || txDate.getFullYear() === selectedYear;
+      return matchMonth && matchYear;
     });
   }, [transactions, selectedMonth, selectedYear]);
 
@@ -198,9 +245,48 @@ export default function ManagerDashboard({
     return results.sort((a, b) => b.outstandingBill - a.outstandingBill);
   }, [filteredTransactions, users]);
 
-  // Recharts: Trend data over the month (Daily aggregations)
+  // Recharts: Trend data over the month (Daily or Monthly aggregations)
   const chartTrendData = useMemo(() => {
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    if (selectedMonth === 'all') {
+      const monthlyData: { [key: string]: { monthKey: string; monthLabel: string; Intake: number; Deposit: number; Return: number; year: number; month: number } } = {};
+      
+      transactions.forEach(tx => {
+        const d = new Date(tx.date);
+        const m = d.getMonth() + 1;
+        const y = d.getFullYear();
+        const key = `${m}-${y}`;
+        if (!monthlyData[key]) {
+          monthlyData[key] = {
+            monthKey: key,
+            monthLabel: `${IndonesianMonths[m - 1].slice(0, 3)} ${y}`,
+            Intake: 0,
+            Deposit: 0,
+            Return: 0,
+            year: y,
+            month: m
+          };
+        }
+        if (tx.type === TransactionType.INTAKE && tx.items) {
+          tx.items.forEach(item => { monthlyData[key].Intake += item.total; });
+        } else if (tx.type === TransactionType.DEPOSIT) {
+          monthlyData[key].Deposit += tx.amount || 0;
+        } else if (tx.type === TransactionType.RETURN && tx.items) {
+          tx.items.forEach(item => { monthlyData[key].Return += item.total; });
+        }
+      });
+      
+      return Object.values(monthlyData).sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      }).map(it => ({
+        day: it.monthLabel,
+        Intake: it.Intake,
+        Deposit: it.Deposit,
+        Return: it.Return
+      }));
+    }
+
+    const daysInMonth = new Date(selectedYear, selectedMonth as number, 0).getDate();
     const dayData: { [day: number]: { day: string; Intake: number; Deposit: number; Return: number } } = {};
 
     for (let i = 1; i <= daysInMonth; i++) {
@@ -226,7 +312,7 @@ export default function ManagerDashboard({
     });
 
     return Object.values(dayData);
-  }, [filteredTransactions, selectedMonth, selectedYear]);
+  }, [transactions, filteredTransactions, selectedMonth, selectedYear]);
 
   // Pie chart data: Intake vs Deposit vs Return
   const pieChartData = useMemo(() => {
@@ -469,30 +555,29 @@ export default function ManagerDashboard({
         <>
           {/* Calendar selector */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm">
-            <span className="text-xs text-slate-500 font-medium">Periode Laporan Bulanan:</span>
-            <div className="flex items-center gap-2 w-full sm:w-auto bg-slate-50 p-1 rounded-xl border border-slate-200/50">
-              <Calendar className="h-3.5 w-3.5 text-slate-400 mr-1 ml-1" />
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="bg-white border border-slate-200 text-slate-850 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-100 font-semibold"
-                id="analytics-month"
-              >
-                {IndonesianMonths.map((m, idx) => (
-                  <option key={m} value={idx + 1}>{m}</option>
-                ))}
-              </select>
-
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="bg-white border border-slate-200 text-slate-850 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-100 font-semibold"
-                id="analytics-year"
-              >
-                {yearsList.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+            <span className="text-xs text-slate-500 font-bold">Periode Laporan:</span>
+            <div className="flex items-center bg-slate-100/80 border border-slate-200/80 rounded-full overflow-hidden p-1 pr-1.5 shadow-sm w-full sm:w-auto sm:max-w-[280px]">
+              <div className="flex items-center gap-1.5 px-2.5 text-slate-500">
+                <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">Bulan Laporan:</span>
+              </div>
+              <div className="relative bg-white rounded-full border border-slate-100 shadow-inner px-3 py-1 flex items-center gap-1.5 min-w-[125px] justify-between flex-1 sm:flex-initial">
+                <select
+                  value={selectedMonthYearKey}
+                  onChange={(e) => handleMonthYearChange(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  id="manager-month-year-select"
+                >
+                  <option value="all">Semua Bulan</option>
+                  {availableMonths.map(item => (
+                    <option key={item.key} value={item.key}>{item.label}</option>
+                  ))}
+                </select>
+                <span className="text-[10px] font-extrabold text-slate-800 truncate max-w-[100px]">
+                  {selectedMonthYearLabel}
+                </span>
+                <ChevronDown className="h-3 w-3 text-slate-400 pointer-events-none" />
+              </div>
             </div>
           </div>
 
@@ -575,18 +660,24 @@ export default function ManagerDashboard({
             <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h2 className="text-sm font-bold text-slate-800">Aktivitas Distribusi & Setoran Harian</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Visualisasi perbandingan pengambilan produk dengan setoran uang masuk.</p>
+                  <h2 className="text-sm font-bold text-slate-800">
+                    {selectedMonth === 'all' ? 'Aktivitas Distribusi & Setoran Bulanan' : 'Aktivitas Distribusi & Setoran Harian'}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {selectedMonth === 'all' ? 'Visualisasi perbandingan pengambilan produk dengan setoran uang masuk bulanan.' : 'Visualisasi perbandingan pengambilan produk dengan setoran uang masuk harian.'}
+                  </p>
                 </div>
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold uppercase font-mono border border-indigo-100">
-                  {IndonesianMonths[selectedMonth - 1]} {selectedYear}
+                  {selectedMonth === 'all' ? 'Semua Bulan' : `${IndonesianMonths[selectedMonth - 1]} ${selectedYear}`}
                 </span>
               </div>
 
               <div className="h-72 w-full">
                 {filteredTransactions.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs">
-                    <p>Tidak ada transaksi pada bulan {IndonesianMonths[selectedMonth - 1]} {selectedYear}</p>
+                    <p>
+                      {selectedMonth === 'all' ? 'Tidak ada transaksi tercatat' : `Tidak ada transaksi pada bulan ${IndonesianMonths[selectedMonth - 1]} ${selectedYear}`}
+                    </p>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -614,7 +705,7 @@ export default function ManagerDashboard({
                         labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '11px' }}
                         itemStyle={{ fontSize: '12px', color: '#0f172a' }}
                         formatter={(v: any) => [formatRupiah(Number(v)), '']}
-                        labelFormatter={(label) => `Tanggal ${label} ${IndonesianMonths[selectedMonth - 1]}`}
+                        labelFormatter={(label) => selectedMonth === 'all' ? `Periode ${label}` : `Tanggal ${label} ${IndonesianMonths[selectedMonth - 1]}`}
                       />
                       <Legend verticalAlign="top" height={36} iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#64748b' }} />
                       <Area type="monotone" name="Produk Dibawa" dataKey="Intake" stroke="#6366F1" strokeWidth={2} fillOpacity={1} fill="url(#colorIntake)" />
