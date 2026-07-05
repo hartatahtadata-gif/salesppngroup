@@ -141,7 +141,7 @@ export default function AdminPanel({
   }[]>([]);
   
   // Transaction items for Intake and Return
-  const [cartItems, setCartItems] = useState<{ productId: string; quantity: number }[]>([]);
+  const [cartItems, setCartItems] = useState<{ productId: string; quantity: number; price?: number }[]>([]);
   const [txError, setTxError] = useState('');
   const [txSuccess, setTxSuccess] = useState('');
 
@@ -395,13 +395,14 @@ export default function AdminPanel({
 
   // Cart Management for logging Intake/Return
   const handleAddToCart = (productId: string) => {
+    const product = products.find(p => p.id === productId);
     const existing = cartItems.find(item => item.productId === productId);
     if (existing) {
       setCartItems(cartItems.map(item => 
         item.productId === productId ? { ...item, quantity: item.quantity + 1 } : item
       ));
     } else {
-      setCartItems([...cartItems, { productId, quantity: 1 }]);
+      setCartItems([...cartItems, { productId, quantity: 1, price: product ? product.price : 0 }]);
     }
     setTxError('');
   };
@@ -418,6 +419,12 @@ export default function AdminPanel({
 
   const handleRemoveFromCart = (productId: string) => {
     setCartItems(cartItems.filter(item => item.productId !== productId));
+  };
+
+  const handleUpdateCartPrice = (productId: string, price: number) => {
+    setCartItems(cartItems.map(item => 
+      item.productId === productId ? { ...item, price: Math.max(0, price) } : item
+    ));
   };
 
   const handleAddDepositCartItem = (productId: string, quantity: number, customPrice?: number) => {
@@ -562,13 +569,14 @@ export default function AdminPanel({
       // Build items array
       const itemsList: TransactionItem[] = cartItems.map(cartItem => {
         const product = products.find(p => p.id === cartItem.productId)!;
+        const priceToUse = cartItem.price !== undefined ? cartItem.price : product.price;
         return {
           productId: product.id,
           productName: product.name,
           quantity: cartItem.quantity,
           unit: product.unit,
-          price: product.price,
-          total: cartItem.quantity * product.price
+          price: priceToUse,
+          total: cartItem.quantity * priceToUse
         };
       });
 
@@ -1155,7 +1163,18 @@ export default function AdminPanel({
                             <div key={item.productId} className="flex justify-between items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 text-xs">
                               <div className="min-w-0 flex-1">
                                 <p className="font-semibold text-slate-800 truncate">{prod.name}</p>
-                                <p className="text-[10px] text-slate-500 mt-0.5">{formatRupiah(prod.price)} / {prod.unit}</p>
+                                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
+                                  <span>Rp</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={item.price !== undefined ? item.price : prod.price}
+                                    onChange={(e) => handleUpdateCartPrice(item.productId, Number(e.target.value))}
+                                    className="w-24 bg-slate-100/80 hover:bg-slate-100 focus:bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 text-xs"
+                                    title="Edit harga per satuan"
+                                  />
+                                  <span>/ {prod.unit}</span>
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-2">
@@ -1192,7 +1211,8 @@ export default function AdminPanel({
                           <span className={selectedTxType === TransactionType.INTAKE ? 'text-indigo-600' : 'text-blue-600'}>
                             {formatRupiah(cartItems.reduce((acc, c) => {
                               const p = products.find(pr => pr.id === c.productId);
-                              return acc + (c.quantity * (p?.price || 0));
+                              const priceToUse = c.price !== undefined ? c.price : (p?.price || 0);
+                              return acc + (c.quantity * priceToUse);
                             }, 0))}
                           </span>
                         </div>
@@ -1963,12 +1983,13 @@ export default function AdminPanel({
                 {/* If INTAKE or RETURN: items quantity inputs */}
                 {editingTx.type !== TransactionType.DEPOSIT && editTxItems.length > 0 && (
                   <div className="space-y-2">
-                    <label className="block text-slate-500 font-bold uppercase tracking-wider text-[9px]">Kuantitas Item Produk</label>
+                    <label className="block text-slate-500 font-bold uppercase tracking-wider text-[9px]">Kuantitas & Harga Item Produk</label>
                     <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
                       <table className="w-full text-left border-collapse text-xs">
                         <thead>
                           <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
                             <th className="p-2.5">Nama Produk</th>
+                            <th className="p-2.5 text-right w-24">Harga (Rp)</th>
                             <th className="p-2.5 text-right w-24">Jumlah</th>
                             <th className="p-2.5 text-right">Total</th>
                           </tr>
@@ -1978,7 +1999,21 @@ export default function AdminPanel({
                             <tr key={item.productId}>
                               <td className="p-2.5 font-medium">{item.productName}</td>
                               <td className="p-2.5">
-                                <div className="flex items-center justify-end gap-1.5">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={item.price}
+                                  onChange={(e) => {
+                                    const newPrice = Math.max(0, Number(e.target.value));
+                                    const updated = [...editTxItems];
+                                    updated[index] = { ...item, price: newPrice, total: item.quantity * newPrice };
+                                    setEditTxItems(updated);
+                                  }}
+                                  className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-indigo-200 font-semibold font-mono"
+                                />
+                              </td>
+                              <td className="p-2.5">
+                                <div className="flex items-center justify-end gap-1.5 font-mono">
                                   <input
                                     type="number"
                                     min={1}
@@ -1986,15 +2021,15 @@ export default function AdminPanel({
                                     onChange={(e) => {
                                       const newQty = Math.max(1, Number(e.target.value));
                                       const updated = [...editTxItems];
-                                      updated[index] = { ...item, quantity: newQty };
+                                      updated[index] = { ...item, quantity: newQty, total: newQty * item.price };
                                       setEditTxItems(updated);
                                     }}
-                                    className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-indigo-200 font-semibold"
+                                    className="w-12 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-indigo-200 font-semibold"
                                   />
                                   <span className="text-[10px] text-slate-400">{item.unit}</span>
                                 </div>
                               </td>
-                              <td className="p-2.5 text-right font-semibold text-slate-850">
+                              <td className="p-2.5 text-right font-semibold text-slate-850 font-mono">
                                 {formatRupiah(item.quantity * item.price)}
                               </td>
                             </tr>
