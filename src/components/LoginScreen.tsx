@@ -45,7 +45,9 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
       setError('Akun tersebut dinonaktifkan oleh Manajer.');
       return;
     }
-    onLogin(user);
+    setEmail(user.email);
+    setPassword('');
+    setError('');
   };
 
   return (
