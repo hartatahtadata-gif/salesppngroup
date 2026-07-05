@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Product, Transaction, TransactionType } from './types';
-import { getStoredData, saveStoredData } from './data/initialData';
+import { getStoredData, saveStoredData, INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, INITIAL_USERS } from './data/initialData';
 import LoginScreen from './components/LoginScreen';
 import StaffDashboard from './components/StaffDashboard';
 import AdminPanel from './components/AdminPanel';
@@ -47,17 +47,9 @@ export default function App() {
   const [firebaseActive, setFirebaseActive] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  // Load from localStorage on mount and sync with Firebase if configured
+  // Load and sync with Firebase if configured, otherwise use localStorage fallback
   useEffect(() => {
     const loadAndSyncData = async () => {
-      // 1. Initial Offline Fallback Load
-      const localData = getStoredData();
-      setProducts(localData.products);
-      setTransactions(localData.transactions);
-      setUsers(localData.users);
-      setLoading(false);
-
-      // 2. Firebase Database Sync
       if (isFirebaseConfigured()) {
         try {
           setSyncing(true);
@@ -65,30 +57,49 @@ export default function App() {
           if (isConnected) {
             setFirebaseActive(true);
             
-            // Seed default dataset to Firestore if collections are empty
-            await seedInitialFirebaseData(localData.products, localData.transactions, localData.users);
+            // Seed default dataset to Firestore if collections are empty (using the pristine initial template)
+            await seedInitialFirebaseData(INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, INITIAL_USERS);
 
-            // Fetch live data
+            // Fetch live cloud data
             const fbProducts = await getProductsFromFirebase();
             const fbTransactions = await getTransactionsFromFirebase();
             const fbUsers = await getUsersFromFirebase();
 
+            // Clear any old local storage data to prevent any interference
+            try {
+              localStorage.removeItem('mop_products');
+              localStorage.removeItem('mop_transactions');
+              localStorage.removeItem('mop_users');
+            } catch (e) {}
+
             if (fbProducts) setProducts(fbProducts);
             if (fbTransactions) setTransactions(fbTransactions);
             if (fbUsers) setUsers(fbUsers);
-
-            // Update offline cache with fresh Firebase data
-            saveStoredData(
-              fbProducts || localData.products,
-              fbTransactions || localData.transactions,
-              fbUsers || localData.users
-            );
+          } else {
+            // Firebase is configured but we couldn't connect, fall back to localStorage
+            console.warn("Firebase configured but connection failed. Falling back to offline mode.");
+            const localData = getStoredData();
+            setProducts(localData.products);
+            setTransactions(localData.transactions);
+            setUsers(localData.users);
           }
         } catch (error) {
           console.error("Firebase database synchronization failed. Continuing offline:", error);
+          const localData = getStoredData();
+          setProducts(localData.products);
+          setTransactions(localData.transactions);
+          setUsers(localData.users);
         } finally {
           setSyncing(false);
+          setLoading(false);
         }
+      } else {
+        // No Firebase configuration, run in pure localStorage Mode
+        const localData = getStoredData();
+        setProducts(localData.products);
+        setTransactions(localData.transactions);
+        setUsers(localData.users);
+        setLoading(false);
       }
     };
 

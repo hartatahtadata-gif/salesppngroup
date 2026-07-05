@@ -287,6 +287,20 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
 
 // Helper to load/save state from localStorage
 export const getStoredData = () => {
+  // If Firebase environment variables are configured, bypass localStorage to prevent any stale offline data contamination
+  const isFirebaseConfigured = !!(
+    (import.meta as any).env.VITE_FIREBASE_PROJECT_ID && 
+    (import.meta as any).env.VITE_FIREBASE_API_KEY
+  );
+
+  if (isFirebaseConfigured) {
+    return {
+      products: INITIAL_PRODUCTS,
+      transactions: INITIAL_TRANSACTIONS,
+      users: INITIAL_USERS
+    };
+  }
+
   try {
     const products = localStorage.getItem('mop_products');
     const transactions = localStorage.getItem('mop_transactions');
@@ -308,6 +322,16 @@ export const getStoredData = () => {
 };
 
 export const saveStoredData = (products: Product[], transactions: Transaction[], users: User[]) => {
+  // If Firebase environment variables are configured, never save to localStorage as the cloud is the only source of truth
+  const isFirebaseConfigured = !!(
+    (import.meta as any).env.VITE_FIREBASE_PROJECT_ID && 
+    (import.meta as any).env.VITE_FIREBASE_API_KEY
+  );
+
+  if (isFirebaseConfigured) {
+    return;
+  }
+
   try {
     localStorage.setItem('mop_products', JSON.stringify(products));
     localStorage.setItem('mop_transactions', JSON.stringify(transactions));
