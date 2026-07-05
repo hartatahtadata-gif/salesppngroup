@@ -142,11 +142,37 @@ export default function StaffDashboard({
     };
   }, [filteredPersonalTransactions]);
 
-  // Calculate list of products currently carried by this staff
+  // Lifetime ledger calculations (unfiltered by selected month/year) for current balance
+  const lifetimeLedger = useMemo(() => {
+    let totalTaken = 0;
+    let totalDeposited = 0;
+    let totalReturned = 0;
+
+    personalTransactions.forEach(tx => {
+      if (tx.type === TransactionType.INTAKE) {
+        tx.items?.forEach(item => { totalTaken += item.total; });
+      } else if (tx.type === TransactionType.DEPOSIT) {
+        totalDeposited += tx.amount || 0;
+      } else if (tx.type === TransactionType.RETURN) {
+        tx.items?.forEach(item => { totalReturned += item.total; });
+      }
+    });
+
+    const outstandingBill = totalTaken - totalDeposited - totalReturned;
+
+    return {
+      totalTaken,
+      totalDeposited,
+      totalReturned,
+      outstandingBill
+    };
+  }, [personalTransactions]);
+
+  // Calculate list of products currently carried by this staff (lifetime/real-time)
   const carriedProducts = useMemo(() => {
     const counts: { [productId: string]: { name: string; unit: string; price: number; quantity: number } } = {};
 
-    filteredPersonalTransactions.forEach(tx => {
+    personalTransactions.forEach(tx => {
       if (tx.type === TransactionType.INTAKE) {
         tx.items?.forEach(item => {
           if (!counts[item.productId]) {
@@ -193,7 +219,7 @@ export default function StaffDashboard({
         totalValue: counts[id].quantity * counts[id].price
       }))
       .filter(item => item.quantity > 0);
-  }, [filteredPersonalTransactions]);
+  }, [personalTransactions]);
 
   // Sum total value of currently carried products
   const totalCarriedValue = useMemo(() => {
@@ -295,7 +321,7 @@ export default function StaffDashboard({
               <span>Sisa Kewajiban Tagihan</span>
             </span>
             <h3 className="text-xl font-black text-orange-700 font-sans tracking-tight mt-1.5">
-              {formatRupiah(personalLedger.outstandingBill)}
+              {formatRupiah(lifetimeLedger.outstandingBill)}
             </h3>
           </div>
           <p className="text-[10px] text-orange-650 mt-4 border-t border-orange-100 pt-2 flex items-center gap-1.5">
