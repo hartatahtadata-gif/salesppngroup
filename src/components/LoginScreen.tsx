@@ -10,18 +10,18 @@ interface LoginScreenProps {
 
 export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [email, setEmail] = useState<string>('');
+  const [fullName, setFullName] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
-      setError('Silakan masukkan email Anda.');
+    if (!fullName) {
+      setError('Silakan masukkan nama lengkap Anda.');
       return;
     }
 
-    const matchedUser = users.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
+    const matchedUser = users.find(u => u.name.toLowerCase() === fullName.toLowerCase().trim());
     if (matchedUser) {
       if (matchedUser.status === 'inactive') {
         setError('Akun Anda dinonaktifkan oleh Manajer. Silakan hubungi Manajer Anda.');
@@ -36,7 +36,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
       
       onLogin(matchedUser);
     } else {
-      setError('User tidak ditemukan. Gunakan salah satu email dari panel PILIH PROFIL di bawah.');
+      setError('User tidak ditemukan. Gunakan salah satu nama dari panel PILIH PROFIL di bawah.');
     }
   };
 
@@ -45,7 +45,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
       setError('Akun tersebut dinonaktifkan oleh Manajer.');
       return;
     }
-    setEmail(user.email);
+    setFullName(user.name);
     setPassword('');
     setError('');
   };
@@ -108,14 +108,14 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
           <form onSubmit={handleManualSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Alamat Email</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nama Lengkap</label>
               <input
-                type="email"
-                placeholder="contoh: budi.santoso@sales.com"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                type="text"
+                placeholder="contoh: Budi Santoso"
+                value={fullName}
+                onChange={(e) => { setFullName(e.target.value); setError(''); }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all"
-                id="login-email-input"
+                id="login-name-input"
               />
             </div>
 
@@ -147,63 +147,48 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
           {/* Quick Login Section */}
           <div className="mt-8 pt-6 border-t border-slate-100">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">PILIH PROFIL</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Staff Button */}
-              {users.filter(u => u.role === UserRole.STAFF).slice(0, 1).map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => selectQuickUser(user)}
-                  className="bg-slate-50 hover:bg-amber-50/30 hover:border-amber-500/30 border border-slate-200 p-3.5 rounded-xl text-left transition-all duration-200 group cursor-pointer"
-                  id={`quick-login-${user.id}`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="p-1 bg-amber-100 rounded text-amber-700 group-hover:bg-amber-200">
-                      <UserCheck className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-[10px] font-bold text-amber-700 tracking-wider uppercase">Staff</span>
-                  </div>
-                  <div className="font-semibold text-slate-800 text-xs truncate">{user.name}</div>
-                  <div className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</div>
-                </button>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {users.map((user) => {
+                const isStaff = user.role === UserRole.STAFF;
+                const isAdmin = user.role === UserRole.ADMIN;
+                const isManager = user.role === UserRole.MANAGER;
 
-              {/* Admin Button */}
-              {users.filter(u => u.role === UserRole.ADMIN).slice(0, 1).map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => selectQuickUser(user)}
-                  className="bg-slate-50 hover:bg-emerald-50/30 hover:border-emerald-500/30 border border-slate-200 p-3.5 rounded-xl text-left transition-all duration-200 group cursor-pointer"
-                  id={`quick-login-${user.id}`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="p-1 bg-emerald-100 rounded text-emerald-700 group-hover:bg-emerald-200">
-                      <Landmark className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 tracking-wider uppercase">Admin</span>
-                  </div>
-                  <div className="font-semibold text-slate-800 text-xs truncate">{user.name}</div>
-                  <div className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</div>
-                </button>
-              ))}
+                let roleColor = 'text-amber-700 bg-amber-100 hover:bg-amber-200';
+                let roleLabel = 'Staff';
+                let IconComponent = UserCheck;
+                let bgBorderHover = 'hover:bg-amber-50/30 hover:border-amber-500/30';
 
-              {/* Manager Button */}
-              {users.filter(u => u.role === UserRole.MANAGER).slice(0, 1).map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => selectQuickUser(user)}
-                  className="bg-slate-50 hover:bg-indigo-50/30 hover:border-indigo-500/30 border border-slate-200 p-3.5 rounded-xl text-left transition-all duration-200 group cursor-pointer"
-                  id={`quick-login-${user.id}`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="p-1 bg-indigo-100 rounded text-indigo-700 group-hover:bg-indigo-200">
-                      <ShoppingBag className="h-3.5 w-3.5" />
+                if (isAdmin) {
+                  roleColor = 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200';
+                  roleLabel = 'Admin';
+                  IconComponent = Landmark;
+                  bgBorderHover = 'hover:bg-emerald-50/30 hover:border-emerald-500/30';
+                } else if (isManager) {
+                  roleColor = 'text-indigo-700 bg-indigo-100 hover:bg-indigo-200';
+                  roleLabel = 'Manager';
+                  IconComponent = ShoppingBag;
+                  bgBorderHover = 'hover:bg-indigo-50/30 hover:border-indigo-500/30';
+                }
+
+                return (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => selectQuickUser(user)}
+                    className={`bg-slate-50 border border-slate-200 p-3 rounded-xl text-left transition-all duration-200 group cursor-pointer ${bgBorderHover}`}
+                    id={`quick-login-${user.id}`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`p-0.5 rounded ${roleColor.split(' ')[1]} ${roleColor.split(' ')[0]}`}>
+                        <IconComponent className="h-3 w-3" />
+                      </div>
+                      <span className={`text-[9px] font-bold tracking-wider uppercase ${roleColor.split(' ')[0]}`}>{roleLabel}</span>
                     </div>
-                    <span className="text-[10px] font-bold text-indigo-700 tracking-wider uppercase">Manager</span>
-                  </div>
-                  <div className="font-semibold text-slate-800 text-xs truncate">{user.name}</div>
-                  <div className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</div>
-                </button>
-              ))}
+                    <div className="font-semibold text-slate-800 text-xs truncate">{user.name}</div>
+                    <div className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

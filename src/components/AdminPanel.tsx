@@ -747,7 +747,7 @@ export default function AdminPanel({
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <ShoppingBag className="h-4 w-4 text-indigo-500" />
-                  Kolom 1: Katalog & Stok SKU
+                  Katalog & Stok SKU
                 </h2>
                 <button
                   onClick={handleOpenAddProduct}
