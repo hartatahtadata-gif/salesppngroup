@@ -11,9 +11,25 @@ import {
   ShieldCheck, 
   Users, 
   Warehouse, 
-  ArrowRight
+  ArrowRight,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  isFirebaseConfigured,
+  getProductsFromFirebase,
+  getTransactionsFromFirebase,
+  getUsersFromFirebase,
+  saveProductToFirebase,
+  deleteProductFromFirebase,
+  saveTransactionToFirebase,
+  saveUserToFirebase,
+  deleteUserFromFirebase,
+  seedInitialFirebaseData,
+  testConnection
+} from './lib/firebase';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -26,32 +42,142 @@ export default function App() {
   // Loading state
   const [loading, setLoading] = useState(true);
 
-  // Load from localStorage on mount
+  // Firebase connection and sync states
+  const [firebaseActive, setFirebaseActive] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  // Load from localStorage on mount and sync with Firebase if configured
   useEffect(() => {
-    const data = getStoredData();
-    setProducts(data.products);
-    setTransactions(data.transactions);
-    setUsers(data.users);
-    setLoading(false);
+    const loadAndSyncData = async () => {
+      // 1. Initial Offline Fallback Load
+      const localData = getStoredData();
+      setProducts(localData.products);
+      setTransactions(localData.transactions);
+      setUsers(localData.users);
+      setLoading(false);
+
+      // 2. Firebase Database Sync
+      if (isFirebaseConfigured()) {
+        try {
+          setSyncing(true);
+          const isConnected = await testConnection();
+          if (isConnected) {
+            setFirebaseActive(true);
+            
+            // Seed default dataset to Firestore if collections are empty
+            await seedInitialFirebaseData(localData.products, localData.transactions, localData.users);
+
+            // Fetch live data
+            const fbProducts = await getProductsFromFirebase();
+            const fbTransactions = await getTransactionsFromFirebase();
+            const fbUsers = await getUsersFromFirebase();
+
+            if (fbProducts) setProducts(fbProducts);
+            if (fbTransactions) setTransactions(fbTransactions);
+            if (fbUsers) setUsers(fbUsers);
+
+            // Update offline cache with fresh Firebase data
+            saveStoredData(
+              fbProducts || localData.products,
+              fbTransactions || localData.transactions,
+              fbUsers || localData.users
+            );
+          }
+        } catch (error) {
+          console.error("Firebase database synchronization failed. Continuing offline:", error);
+        } finally {
+          setSyncing(false);
+        }
+      }
+    };
+
+    loadAndSyncData();
   }, []);
 
-  // Save to localStorage whenever states change
-  const handleUpdateProducts = (updatedProducts: Product[]) => {
+  // Save to state + localStorage + Firebase whenever states change
+  const handleUpdateProducts = async (updatedProducts: Product[]) => {
     setProducts(updatedProducts);
     saveStoredData(updatedProducts, transactions, users);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        for (const p of updatedProducts) {
+          await saveProductToFirebase(p);
+        }
+      } catch (e) {
+        console.error("Firebase product sync error:", e);
+      }
+    }
   };
 
-  const handleAddTransaction = (newTransaction: Transaction) => {
+  const handleAddTransaction = async (newTransaction: Transaction) => {
     const updatedTx = [newTransaction, ...transactions];
     setTransactions(updatedTx);
     saveStoredData(products, updatedTx, users);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        await saveTransactionToFirebase(newTransaction);
+        // Also sync updated product stocks to Firebase
+        for (const p of products) {
+          await saveProductToFirebase(p);
+        }
+      } catch (e) {
+        console.error("Firebase transaction sync error:", e);
+      }
+    }
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (confirm('Apakah Anda yakin ingin menghapus produk ini dari katalog?')) {
       const updatedProds = products.filter(p => p.id !== productId);
       setProducts(updatedProds);
       saveStoredData(updatedProds, transactions, users);
+
+      if (isFirebaseConfigured() && firebaseActive) {
+        try {
+          await deleteProductFromFirebase(productId);
+        } catch (e) {
+          console.error("Firebase product deletion sync error:", e);
+        }
+      }
+    }
+  };
+
+  // User / Access Management handlers for the Manager role
+  const handleSaveUser = async (user: User) => {
+    const exists = users.some(u => u.id === user.id);
+    let updatedUsers: User[];
+    
+    if (exists) {
+      updatedUsers = users.map(u => u.id === user.id ? user : u);
+    } else {
+      updatedUsers = [...users, user];
+    }
+    
+    setUsers(updatedUsers);
+    saveStoredData(products, transactions, updatedUsers);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        await saveUserToFirebase(user);
+      } catch (e) {
+        console.error("Firebase user save sync error:", e);
+      }
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    const updatedUsers = users.filter(u => u.id !== userId);
+    setUsers(updatedUsers);
+    saveStoredData(products, transactions, updatedUsers);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        await deleteUserFromFirebase(userId);
+      } catch (e) {
+        console.error("Firebase user deletion sync error:", e);
+      }
     }
   };
 
@@ -119,6 +245,31 @@ export default function App() {
 
                 {/* Profile and Logout info */}
                 <div className="flex items-center gap-3">
+                  {/* Real-time Firebase Database Connection Status Badge */}
+                  <div className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-xl border shrink-0">
+                    {isFirebaseConfigured() ? (
+                      firebaseActive ? (
+                        <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50/60 border-emerald-100">
+                          <Cloud className="h-3 w-3 text-emerald-500" />
+                          <span className="hidden sm:inline">Firebase Connected</span>
+                          <span className="inline sm:hidden">Cloud</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-600 bg-amber-50/60 border-amber-100">
+                          <CloudOff className="h-3 w-3 text-amber-500" />
+                          <span>No Conn</span>
+                        </span>
+                      )
+                    ) : (
+                      <span className="flex items-center gap-1 text-slate-500 bg-slate-50/80 border-slate-200">
+                        <CloudOff className="h-3 w-3 text-slate-400" />
+                        <span className="hidden sm:inline">Offline (LocalStorage)</span>
+                        <span className="inline sm:hidden">Local</span>
+                      </span>
+                    )}
+                    {syncing && <RefreshCw className="h-2.5 w-2.5 animate-spin text-slate-400 ml-1" />}
+                  </div>
+
                   <div className="text-right hidden md:block">
                     <span className="text-xs font-bold text-slate-800 block">{currentUser.name}</span>
                     <span className="text-[10px] text-slate-400 block font-bold tracking-wide uppercase capitalize">Role: {currentUser.role}</span>
@@ -191,6 +342,10 @@ export default function App() {
                       products={products}
                       transactions={transactions}
                       users={users}
+                      onSaveUser={handleSaveUser}
+                      onDeleteUser={handleDeleteUser}
+                      firebaseActive={firebaseActive}
+                      isFirebaseConfigured={isFirebaseConfigured()}
                     />
                   </motion.div>
                 )}
@@ -203,3 +358,4 @@ export default function App() {
     </div>
   );
 }
+

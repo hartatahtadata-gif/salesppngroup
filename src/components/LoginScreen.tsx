@@ -23,6 +23,10 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
     const matchedUser = users.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
     if (matchedUser) {
+      if (matchedUser.status === 'inactive') {
+        setError('Akun Anda dinonaktifkan oleh Manajer. Silakan hubungi Manajer Anda.');
+        return;
+      }
       onLogin(matchedUser);
     } else {
       setError('User tidak ditemukan. Gunakan salah satu email dari panel Quick Login di bawah.');
@@ -30,6 +34,10 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
   };
 
   const selectQuickUser = (user: User) => {
+    if (user.status === 'inactive') {
+      setError('Akun tersebut dinonaktifkan oleh Manajer.');
+      return;
+    }
     onLogin(user);
   };
 

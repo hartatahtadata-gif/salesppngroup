@@ -11,6 +11,7 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   phone?: string;
+  status?: 'active' | 'inactive';
 }
 
 export interface Product {

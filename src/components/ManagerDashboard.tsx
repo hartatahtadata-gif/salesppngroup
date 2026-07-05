@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Product, Transaction, TransactionType, User, StaffSummary } from '../types';
+import { Product, Transaction, TransactionType, User, StaffSummary, UserRole } from '../types';
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -26,18 +26,64 @@ import {
   Calendar, 
   Search,
   ArrowRightLeft,
-  Briefcase
+  Briefcase,
+  UserCheck,
+  UserX,
+  Plus,
+  Edit,
+  Trash2,
+  Key,
+  Phone,
+  Mail,
+  Lock,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 
 interface ManagerDashboardProps {
   products: Product[];
   transactions: Transaction[];
   users: User[];
+  onSaveUser: (user: User) => void;
+  onDeleteUser: (userId: string) => void;
+  firebaseActive: boolean;
+  isFirebaseConfigured: boolean;
 }
 
-export default function ManagerDashboard({ products, transactions, users }: ManagerDashboardProps) {
+export default function ManagerDashboard({ 
+  products, 
+  transactions, 
+  users, 
+  onSaveUser, 
+  onDeleteUser,
+  firebaseActive,
+  isFirebaseConfigured
+}: ManagerDashboardProps) {
+  // Navigation tabs
+  const [activeTab, setActiveTab] = useState<'analytics' | 'access'>('analytics');
+
+  // Month & Year state
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  // User list searching / filtering
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  
+  // Modal / Form state for user creation/editing
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  
+  // Form input states
+  const [formId, setFormId] = useState('');
+  const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formRole, setFormRole] = useState<UserRole>(UserRole.STAFF);
+  const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
+  const [formAvatar, setFormAvatar] = useState('');
+  const [formError, setFormError] = useState('');
 
   const IndonesianMonths = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -221,314 +267,792 @@ export default function ManagerDashboard({ products, transactions, users }: Mana
     return warnings;
   }, [products]);
 
+  // Filtered Users List
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      const matchesSearch = 
+        user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        user.role.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        (user.phone && user.phone.includes(userSearchQuery));
+      return matchesSearch;
+    });
+  }, [users, userSearchQuery]);
+
+  // Toggle user active status directly
+  const handleToggleStatus = (user: User) => {
+    const nextStatus = user.status === 'inactive' ? 'active' : 'inactive';
+    const updatedUser: User = {
+      ...user,
+      status: nextStatus
+    };
+    onSaveUser(updatedUser);
+  };
+
+  // Open modal for user creation
+  const handleOpenAddModal = () => {
+    setEditingUser(null);
+    setFormId('');
+    setFormName('');
+    setFormEmail('');
+    setFormPhone('');
+    setFormRole(UserRole.STAFF);
+    setFormStatus('active');
+    setFormAvatar('');
+    setFormError('');
+    setIsUserModalOpen(true);
+  };
+
+  // Open modal for editing user
+  const handleOpenEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormId(user.id);
+    setFormName(user.name);
+    setFormEmail(user.email);
+    setFormPhone(user.phone || '');
+    setFormRole(user.role);
+    setFormStatus(user.status || 'active');
+    setFormAvatar(user.avatarUrl || '');
+    setFormError('');
+    setIsUserModalOpen(true);
+  };
+
+  // Submit Add/Edit user form
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!formName.trim() || !formEmail.trim()) {
+      setFormError('Nama lengkap dan alamat email wajib diisi.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formEmail)) {
+      setFormError('Format email tidak valid.');
+      return;
+    }
+
+    // ID generation if empty (only for creation)
+    let finalId = formId.trim();
+    if (!editingUser) {
+      if (!finalId) {
+        const prefix = formRole === UserRole.STAFF ? 'staff-' : formRole === UserRole.ADMIN ? 'admin-' : 'manager-';
+        const count = users.filter(u => u.role === formRole).length + 1;
+        finalId = `${prefix}${Date.now().toString().slice(-4)}${count}`;
+      } else {
+        // Check if ID already exists
+        if (users.some(u => u.id.toLowerCase() === finalId.toLowerCase())) {
+          setFormError('ID Pengguna / Username tersebut sudah digunakan.');
+          return;
+        }
+      }
+    }
+
+    // Avatar generation if empty
+    let finalAvatar = formAvatar.trim();
+    if (!finalAvatar) {
+      const colors = ['6366F1', '10B981', '3B82F6', 'F59E0B', 'EF4444', '8B5CF6'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      finalAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(formName)}&background=${randomColor}&color=fff&size=150&bold=true`;
+    }
+
+    const savedUser: User = {
+      id: finalId,
+      name: formName.trim(),
+      email: formEmail.trim().toLowerCase(),
+      role: formRole,
+      phone: formPhone.trim() || undefined,
+      status: formStatus,
+      avatarUrl: finalAvatar
+    };
+
+    onSaveUser(savedUser);
+    setIsUserModalOpen(false);
+  };
+
+  // Delete user account
+  const handleDeleteUserClick = (userId: string, userName: string) => {
+    if (confirm(`Apakah Anda yakin ingin menghapus akun ${userName}? Tindakan ini permanen.`)) {
+      onDeleteUser(userId);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in" id="manager-dashboard-view">
-      {/* Upper bar: Date selectors */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 font-sans tracking-tight">Dashboard Analisis Manajer</h1>
-          <p className="text-slate-500 text-xs mt-1">Laporan bulanan monitoring distribusi produk, setoran, dan keuangan staff penjualan.</p>
-        </div>
-
-        <div className="flex items-center gap-2 w-full md:w-auto shrink-0 bg-slate-50 p-1.5 rounded-xl border border-slate-200/60">
-          <Calendar className="h-4 w-4 text-slate-400 mr-1 ml-1" />
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-100 font-medium"
-            id="manager-month-select"
-          >
-            {IndonesianMonths.map((m, idx) => (
-              <option key={m} value={idx + 1}>{m}</option>
-            ))}
-          </select>
-
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="bg-white border border-slate-200 text-slate-800 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-100 font-medium"
-            id="manager-year-select"
-          >
-            {yearsList.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Main KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="manager-kpi-grid">
-        {/* Total Taken (Nominal Produk Dibawa) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Produk Dibawa Staff</span>
-              <h3 className="text-xl font-extrabold text-slate-900 font-sans tracking-tight mt-1">
-                {formatRupiah(stats.totalTaken)}
-              </h3>
-            </div>
-            <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600 border border-indigo-100">
-              <Briefcase className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2 flex items-center gap-1">
-            <span>Total produk dari gudang admin bulan ini</span>
-          </p>
-        </div>
-
-        {/* Total Deposited (Nominal Sudah Disetor) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Nominal Sudah Disetor</span>
-              <h3 className="text-xl font-extrabold text-emerald-600 font-sans tracking-tight mt-1">
-                {formatRupiah(stats.totalDeposited)}
-              </h3>
-            </div>
-            <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
-              <DollarSign className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2 flex items-center gap-1">
-            <span className="text-emerald-600 font-bold">
-              {stats.totalTaken > 0 ? ((stats.totalDeposited / stats.totalTaken) * 100).toFixed(1) : 0}%
-            </span>
-            <span>dari total produk dibawa</span>
-          </p>
-        </div>
-
-        {/* Total Returned (Retur) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Produk Diretur</span>
-              <h3 className="text-xl font-extrabold text-blue-600 font-sans tracking-tight mt-1">
-                {formatRupiah(stats.totalReturned)}
-              </h3>
-            </div>
-            <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100">
-              <RotateCcw className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2">
-            <span>Barang rusak / kedaluwarsa ditarik kembali</span>
-          </p>
-        </div>
-
-        {/* Outstanding Bill (Sisa Tagihan) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sisa Tagihan Staff</span>
-              <h3 className="text-xl font-extrabold text-red-600 font-sans tracking-tight mt-1">
-                {formatRupiah(stats.outstandingBill)}
-              </h3>
-            </div>
-            <div className="p-2.5 bg-red-50 rounded-xl text-red-600 border border-red-100">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2 flex items-center gap-1">
-            <span>Outstanding piutang yang wajib ditagih</span>
-          </p>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="manager-charts-row">
-        {/* Trend Area Chart (8 cols) */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-sm font-bold text-slate-800">Aktivitas Distribusi & Setoran Harian</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Visualisasi perbandingan pengambilan produk, setoran uang, dan retur.</p>
-            </div>
-            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold uppercase font-mono border border-indigo-100">
-              {IndonesianMonths[selectedMonth - 1]} {selectedYear}
-            </span>
-          </div>
-
-          <div className="h-72 w-full">
-            {filteredTransactions.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs">
-                <p>Tidak ada transaksi pada bulan {IndonesianMonths[selectedMonth - 1]} {selectedYear}</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorIntake" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366F1" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#6366F1" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorDeposit" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" opacity={0.8} />
-                  <XAxis dataKey="day" stroke="#94A3B8" fontSize={10} tickLine={false} />
-                  <YAxis 
-                    stroke="#94A3B8" 
-                    fontSize={10} 
-                    tickLine={false}
-                    tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${v/1000}k` : v} 
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                    labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '11px' }}
-                    itemStyle={{ fontSize: '12px', color: '#0f172a' }}
-                    formatter={(v: any) => [formatRupiah(Number(v)), '']}
-                    labelFormatter={(label) => `Tanggal ${label} ${IndonesianMonths[selectedMonth - 1]}`}
-                  />
-                  <Legend verticalAlign="top" height={36} iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#64748b' }} />
-                  <Area type="monotone" name="Produk Dibawa" dataKey="Intake" stroke="#6366F1" strokeWidth={2} fillOpacity={1} fill="url(#colorIntake)" />
-                  <Area type="monotone" name="Setoran Uang" dataKey="Deposit" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorDeposit)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        {/* Breakdown Pie Chart (4 cols) */}
-        <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+      {/* Upper Navigation & Tabs */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-sm font-bold text-slate-800 mb-1">Proporsi Status Tagihan</h2>
-            <p className="text-xs text-slate-500 font-sans">Rincian penyerapan produk yang dibawa sales bulan ini.</p>
+            <h1 className="text-xl font-bold text-slate-900 font-sans tracking-tight">Portal Manajemen Manajer</h1>
+            <p className="text-slate-500 text-xs mt-1">Kelola hak akses staff, pantau kinerja distribusi penjualan, serta lakukan monitoring real-time cloud.</p>
           </div>
-
-          <div className="h-52 w-full flex items-center justify-center my-4">
-            {stats.totalTaken === 0 ? (
-              <div className="text-slate-400 text-xs text-center p-4">
-                Tidak ada data produk dibawa untuk dianalisis.
-              </div>
+          
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Database:</span>
+            {isFirebaseConfigured ? (
+              firebaseActive ? (
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Cloud Firestore Aktif
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-100 rounded-lg font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  Config Offline
+                </span>
+              )
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieChartData.filter(d => d.value > 0)}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                    itemStyle={{ fontSize: '12px', color: '#0f172a' }}
-                    formatter={(v: any) => [formatRupiah(Number(v)), '']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <span className="px-2.5 py-1 bg-slate-100 text-slate-600 border border-slate-200 rounded-lg font-bold">
+                Lokal (LocalStorage)
+              </span>
             )}
           </div>
+        </div>
 
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            {pieChartData.map((d, idx) => (
-              <div key={idx} className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-2 text-slate-500">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }}></div>
-                  <span>{d.name}</span>
+        {/* Tab switch buttons */}
+        <div className="flex bg-slate-50/50 px-6 border-t border-slate-50">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'analytics'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            id="tab-analytics"
+          >
+            <TrendingUp className="h-4 w-4" />
+            <span>Dashboard Analisis</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('access')}
+            className={`px-5 py-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'access'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            id="tab-access"
+          >
+            <Users className="h-4 w-4" />
+            <span>Manajemen Akses Staff</span>
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'analytics' ? (
+        <>
+          {/* Calendar selector */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm">
+            <span className="text-xs text-slate-500 font-medium">Periode Laporan Bulanan:</span>
+            <div className="flex items-center gap-2 w-full sm:w-auto bg-slate-50 p-1 rounded-xl border border-slate-200/50">
+              <Calendar className="h-3.5 w-3.5 text-slate-400 mr-1 ml-1" />
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="bg-white border border-slate-200 text-slate-850 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-100 font-semibold"
+                id="analytics-month"
+              >
+                {IndonesianMonths.map((m, idx) => (
+                  <option key={m} value={idx + 1}>{m}</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="bg-white border border-slate-200 text-slate-850 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-100 font-semibold"
+                id="analytics-year"
+              >
+                {yearsList.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* KPI Statistics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="kpi-grid">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block">Produk Dibawa Staff</span>
+                  <h3 className="text-xl font-extrabold text-slate-900 font-sans tracking-tight mt-1">
+                    {formatRupiah(stats.totalTaken)}
+                  </h3>
                 </div>
-                <span className="font-bold text-slate-800">
-                  {stats.totalTaken > 0 ? `${((d.value / stats.totalTaken) * 100).toFixed(1)}%` : '0%'}
+                <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600 border border-indigo-100">
+                  <Briefcase className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2">
+                Total produk terdistribusi bulan ini
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block">Sudah Disetor (IDR)</span>
+                  <h3 className="text-xl font-extrabold text-emerald-600 font-sans tracking-tight mt-1">
+                    {formatRupiah(stats.totalDeposited)}
+                  </h3>
+                </div>
+                <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
+                  <DollarSign className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2 flex items-center gap-1">
+                <span className="text-emerald-600 font-bold">
+                  {stats.totalTaken > 0 ? ((stats.totalDeposited / stats.totalTaken) * 100).toFixed(1) : 0}%
+                </span>
+                <span>dari produk dibawa</span>
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block">Nilai Produk Diretur</span>
+                  <h3 className="text-xl font-extrabold text-blue-600 font-sans tracking-tight mt-1">
+                    {formatRupiah(stats.totalReturned)}
+                  </h3>
+                </div>
+                <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100">
+                  <RotateCcw className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2">
+                Produk rusak / kedaluwarsa ditarik
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block">Sisa Tagihan Outstanding</span>
+                  <h3 className="text-xl font-extrabold text-red-600 font-sans tracking-tight mt-1">
+                    {formatRupiah(stats.outstandingBill)}
+                  </h3>
+                </div>
+                <div className="p-2.5 bg-red-50 rounded-xl text-red-600 border border-red-100">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-2">
+                Piutang yang wajib ditagihkan
+              </p>
+            </div>
+          </div>
+
+          {/* Recharts Graphical Trends */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="charts-row">
+            <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-800">Aktivitas Distribusi & Setoran Harian</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Visualisasi perbandingan pengambilan produk dengan setoran uang masuk.</p>
+                </div>
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold uppercase font-mono border border-indigo-100">
+                  {IndonesianMonths[selectedMonth - 1]} {selectedYear}
                 </span>
               </div>
-            ))}
+
+              <div className="h-72 w-full">
+                {filteredTransactions.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs">
+                    <p>Tidak ada transaksi pada bulan {IndonesianMonths[selectedMonth - 1]} {selectedYear}</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorIntake" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366F1" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#6366F1" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorDeposit" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" opacity={0.8} />
+                      <XAxis dataKey="day" stroke="#94A3B8" fontSize={10} tickLine={false} />
+                      <YAxis 
+                        stroke="#94A3B8" 
+                        fontSize={10} 
+                        tickLine={false}
+                        tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${v/1000}k` : v} 
+                      />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                        labelStyle={{ color: '#64748b', fontWeight: 'bold', fontSize: '11px' }}
+                        itemStyle={{ fontSize: '12px', color: '#0f172a' }}
+                        formatter={(v: any) => [formatRupiah(Number(v)), '']}
+                        labelFormatter={(label) => `Tanggal ${label} ${IndonesianMonths[selectedMonth - 1]}`}
+                      />
+                      <Legend verticalAlign="top" height={36} iconSize={8} iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#64748b' }} />
+                      <Area type="monotone" name="Produk Dibawa" dataKey="Intake" stroke="#6366F1" strokeWidth={2} fillOpacity={1} fill="url(#colorIntake)" />
+                      <Area type="monotone" name="Setoran Uang" dataKey="Deposit" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorDeposit)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 mb-1">Proporsi Status Tagihan</h2>
+                <p className="text-xs text-slate-500 font-sans">Rincian penyerapan produk yang dibawa sales bulan ini.</p>
+              </div>
+
+              <div className="h-52 w-full flex items-center justify-center my-4">
+                {stats.totalTaken === 0 ? (
+                  <div className="text-slate-400 text-xs text-center p-4">
+                    Tidak ada data produk dibawa untuk dianalisis.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieChartData.filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {pieChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                        itemStyle={{ fontSize: '12px', color: '#0f172a' }}
+                        formatter={(v: any) => [formatRupiah(Number(v)), '']}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                {pieChartData.map((d, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }}></div>
+                      <span>{d.name}</span>
+                    </div>
+                    <span className="font-bold text-slate-800">
+                      {stats.totalTaken > 0 ? `${((d.value / stats.totalTaken) * 100).toFixed(1)}%` : '0%'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Staff Leaderboard and Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="manager-details-row">
-        {/* Staff performance table (7 cols) */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-slate-800">Rincian Tagihan & Kinerja Per Staff</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Urutan staff berdasarkan nominal tagihan outstanding tertinggi.</p>
+          {/* Detailed Leaderboard & Expiry Warning */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="details-row">
+            <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-sm font-bold text-slate-800">Rincian Tagihan & Kinerja Per Staff</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Urutan staff berdasarkan nominal tagihan outstanding tertinggi.</p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-2.5">Nama Staff</th>
+                      <th className="py-2.5 text-right">Produk Dibawa</th>
+                      <th className="py-2.5 text-right">Uang Disetor</th>
+                      <th className="py-2.5 text-right">Retur</th>
+                      <th className="py-2.5 text-right">Sisa Tagihan</th>
+                      <th className="py-2.5 text-right">Rasio Bayar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {staffSummaries.map((s) => {
+                      const netBillable = s.totalTaken - s.totalReturned;
+                      const ratio = netBillable > 0 ? (s.totalDeposited / netBillable) * 100 : 100;
+
+                      return (
+                        <tr key={s.staffId} className="hover:bg-slate-50/55 transition-colors">
+                          <td className="py-3 font-semibold text-slate-900">{s.staffName}</td>
+                          <td className="py-3 text-right">{formatRupiah(s.totalTaken)}</td>
+                          <td className="py-3 text-right text-emerald-600 font-medium">{formatRupiah(s.totalDeposited)}</td>
+                          <td className="py-3 text-right text-blue-600 font-medium">{formatRupiah(s.totalReturned)}</td>
+                          <td className="py-3 text-right text-red-600 font-bold">{formatRupiah(s.outstandingBill)}</td>
+                          <td className="py-3 text-right">
+                            <span className={`px-2 py-0.5 rounded-full font-mono font-bold text-[10px] ${
+                              ratio >= 90 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                              ratio >= 50 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                              'bg-red-50 text-red-700 border border-red-100'
+                            }`}>
+                              {ratio.toFixed(0)}%
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-sm font-bold text-slate-800">Alert Manajemen Stok & Kedaluwarsa</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Produk yang membutuhkan perhatian manajer (Stok tipis / kedaluwarsa &lt; 3 bulan).</p>
+              </div>
+
+              <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                {inventoryWarnings.length === 0 ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-center text-xs text-emerald-700 font-semibold">
+                    Semua produk dalam kondisi aman dan kedaluwarsa terkendali.
+                  </div>
+                ) : (
+                  inventoryWarnings.map((warning, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`p-3 rounded-xl border flex gap-2.5 ${
+                        warning.type === 'both' ? 'bg-red-50 border-red-200 text-red-700' :
+                        warning.type === 'expiry' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                        'bg-slate-50 border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${
+                        warning.type === 'both' ? 'text-red-500' : 'text-amber-500'
+                      }`} />
+                      <div className="text-xs">
+                        <p className="font-bold text-slate-800">{warning.product.name}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{warning.message}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ACCESS AND USER CREDENTIALS MANAGEMENT PANEL */
+        <div className="space-y-6 animate-fade-in" id="access-management-panel">
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+            {/* Search Box */}
+            <div className="relative w-full sm:w-80">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                <Search className="h-4 w-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Cari nama, email, role..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 text-xs transition-all font-medium"
+                id="user-search-input"
+              />
+            </div>
+
+            {/* Create Account Button */}
+            <button
+              onClick={handleOpenAddModal}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer w-full sm:w-auto justify-center shadow-sm"
+              id="btn-create-user"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Tambah Pengguna Baru</span>
+            </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="py-2.5">Nama Staff</th>
-                  <th className="py-2.5 text-right">Produk Dibawa</th>
-                  <th className="py-2.5 text-right">Uang Disetor</th>
-                  <th className="py-2.5 text-right">Retur</th>
-                  <th className="py-2.5 text-right">Sisa Tagihan</th>
-                  <th className="py-2.5 text-right">Rasio Bayar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {staffSummaries.map((s) => {
-                  const netBillable = s.totalTaken - s.totalReturned;
-                  const ratio = netBillable > 0 ? (s.totalDeposited / netBillable) * 100 : 100;
-
-                  return (
-                    <tr key={s.staffId} className="hover:bg-slate-50/55 transition-colors">
-                      <td className="py-3 font-semibold text-slate-900">{s.staffName}</td>
-                      <td className="py-3 text-right">{formatRupiah(s.totalTaken)}</td>
-                      <td className="py-3 text-right text-emerald-600 font-medium">{formatRupiah(s.totalDeposited)}</td>
-                      <td className="py-3 text-right text-blue-600 font-medium">{formatRupiah(s.totalReturned)}</td>
-                      <td className="py-3 text-right text-red-600 font-bold">{formatRupiah(s.outstandingBill)}</td>
-                      <td className="py-3 text-right">
-                        <span className={`px-2 py-0.5 rounded-full font-mono font-bold text-[10px] ${
-                          ratio >= 90 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                          ratio >= 50 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                          'bg-red-50 text-red-700 border border-red-100'
-                        }`}>
-                          {ratio.toFixed(0)}%
-                        </span>
+          {/* User Accounts Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-3 px-5">Nama & Profil</th>
+                    <th className="py-3 px-4">Kontak Email</th>
+                    <th className="py-3 px-4">No. HP</th>
+                    <th className="py-3 px-4">Role Akses</th>
+                    <th className="py-3 px-4">Status Akun</th>
+                    <th className="py-3 px-5 text-center">Aksi / Kontrol</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-slate-400 font-medium">
+                        Tidak ada pengguna yang cocok dengan kriteria pencarian Anda.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-50/30 transition-colors">
+                        {/* Profile Info */}
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366F1&color=fff`}
+                              alt={user.name}
+                              className={`w-9 h-9 rounded-xl object-cover border border-slate-200/60 ${
+                                user.status === 'inactive' ? 'grayscale opacity-60' : ''
+                              }`}
+                              referrerPolicy="no-referrer"
+                            />
+                            <div>
+                              <span className="font-bold text-slate-900 block text-xs">{user.name}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">ID: {user.id}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Email */}
+                        <td className="py-3.5 px-4 font-medium text-slate-600">{user.email}</td>
+
+                        {/* Phone */}
+                        <td className="py-3.5 px-4 font-mono text-slate-500">{user.phone || '-'}</td>
+
+                        {/* Role Badge */}
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
+                            user.role === UserRole.MANAGER ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                            user.role === UserRole.ADMIN ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                            'bg-amber-50 text-amber-700 border border-amber-100'
+                          }`}>
+                            {user.role}
+                          </span>
+                        </td>
+
+                        {/* Toggle Status (Clickable status badge) */}
+                        <td className="py-3.5 px-4">
+                          <button
+                            onClick={() => handleToggleStatus(user)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase cursor-pointer border flex items-center gap-1.5 transition-colors ${
+                              user.status !== 'inactive' 
+                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' 
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                            }`}
+                            title={user.status !== 'inactive' ? "Klik untuk Menolak Akses / Suspend" : "Klik untuk Berikan Akses / Aktifkan"}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${user.status !== 'inactive' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                            <span>{user.status !== 'inactive' ? 'Aktif (Active)' : 'Nonaktif (Suspended)'}</span>
+                          </button>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Toggle Suspend Button Shortcut */}
+                            <button
+                              onClick={() => handleToggleStatus(user)}
+                              className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer ${
+                                user.status !== 'inactive'
+                                  ? 'bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border-slate-200 text-slate-500'
+                                  : 'bg-slate-50 hover:bg-emerald-50 hover:text-emerald-600 border-slate-200 text-slate-500'
+                              }`}
+                              title={user.status !== 'inactive' ? "Bekukan Akses (Suspend)" : "Aktifkan Akses"}
+                            >
+                              {user.status !== 'inactive' ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                            </button>
+
+                            {/* Edit Button */}
+                            <button
+                              onClick={() => handleOpenEditModal(user)}
+                              className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 p-1.5 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Profil Pengguna"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+
+                            {/* Delete Button (Do not allow deleting manager themselves) */}
+                            <button
+                              onClick={() => handleDeleteUserClick(user.id, user.name)}
+                              disabled={user.id === 'manager-1'}
+                              className={`p-1.5 rounded-lg transition-colors border ${
+                                user.id === 'manager-1'
+                                  ? 'bg-slate-100 border-slate-100 text-slate-300 cursor-not-allowed'
+                                  : 'bg-slate-50 hover:bg-rose-50 hover:text-rose-600 border-slate-200 text-slate-600 cursor-pointer'
+                              }`}
+                              title="Hapus Akun Pengguna"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Alerts: Inventory and Expiry (5 cols) */}
-        <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-sm font-bold text-slate-800">Alert Manajemen Stok & Kedaluwarsa</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Produk yang membutuhkan perhatian manajer (Stok tipis / kedaluwarsa &lt; 3 bulan).</p>
-          </div>
-
-          <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
-            {inventoryWarnings.length === 0 ? (
-              <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-center text-xs text-emerald-700 font-semibold">
-                Semua produk dalam kondisi aman dan kedaluwarsa terkendali.
+      {/* MODAL WINDOW FOR ADDING AND EDITING USERS */}
+      {isUserModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-5 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-indigo-400" />
+                <h3 className="text-sm font-bold tracking-tight">
+                  {editingUser ? 'Perbarui Profil Pengguna' : 'Tambah Pengguna Baru'}
+                </h3>
               </div>
-            ) : (
-              inventoryWarnings.map((warning, idx) => (
-                <div 
-                  key={idx} 
-                  className={`p-3 rounded-xl border flex gap-2.5 ${
-                    warning.type === 'both' ? 'bg-red-50 border-red-200 text-red-700' :
-                    warning.type === 'expiry' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                    'bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${
-                    warning.type === 'both' ? 'text-red-500' : 'text-amber-500'
-                  }`} />
-                  <div className="text-xs">
-                    <p className="font-bold text-slate-800">{warning.product.name}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{warning.message}</p>
+              <button
+                onClick={() => setIsUserModalOpen(false)}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
+              {formError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex gap-2 items-center">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              {/* ID input (Disabled on Edit) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ID Pengguna (Username/Unique ID)</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: sales-3 (Biarkan kosong untuk auto-generate)"
+                  value={formId}
+                  onChange={(e) => setFormId(e.target.value)}
+                  disabled={!!editingUser}
+                  className="w-full bg-slate-50 border border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium font-mono"
+                />
+              </div>
+
+              {/* Name */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nama Lengkap</label>
+                <input
+                  type="text"
+                  placeholder="Masukkan nama lengkap staff..."
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                  required
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Alamat Email</label>
+                <input
+                  type="email"
+                  placeholder="contoh: budi.santoso@sales.com"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Phone */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">No. Handphone</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 0812-xxxx-xxxx"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-mono"
+                  />
+                </div>
+
+                {/* Role */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hak Akses (Role)</label>
+                  <select
+                    value={formRole}
+                    onChange={(e) => setFormRole(e.target.value as UserRole)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  >
+                    <option value={UserRole.STAFF}>Staff Lapangan (Sales)</option>
+                    <option value={UserRole.ADMIN}>Administrator Gudang</option>
+                    <option value={UserRole.MANAGER}>Manajer Eksekutif</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Status & Custom Avatar */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Status Selection */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status Keaktifan</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormStatus('active')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                        formStatus === 'active'
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                      }`}
+                    >
+                      Aktif (Active)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormStatus('inactive')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                        formStatus === 'inactive'
+                          ? 'bg-rose-50 border-rose-400 text-rose-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                      }`}
+                    >
+                      Suspend (Blok)
+                    </button>
                   </div>
                 </div>
-              ))
-            )}
+
+                {/* Avatar Field */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custom Avatar URL (Opsional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={formAvatar}
+                    onChange={(e) => setFormAvatar(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-4 border-t border-slate-100 flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsUserModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>{editingUser ? 'Perbarui Akses' : 'Buat Akun Baru'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

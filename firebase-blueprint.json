@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account containing access credentials and role information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["manager", "admin", "staff"] },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "password": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "status", "password"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Product catalog item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "stock": { "type": "number" },
+        "price": { "type": "number" },
+        "unit": { "type": "string" },
+        "expiryDate": { "type": "string" },
+        "image": { "type": "string" }
+      },
+      "required": ["id", "name", "stock", "price", "unit", "expiryDate", "image"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Transaction record for product intakes, cash deposits, or product returns.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "staffId": { "type": "string" },
+        "staffName": { "type": "string" },
+        "type": { "type": "string", "enum": ["intake", "deposit", "return"] },
+        "date": { "type": "string" },
+        "amount": { "type": "number" },
+        "notes": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["id", "staffId", "staffName", "type", "date"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user accounts."
+    },
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of products in catalog."
+    },
+    "transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Collection of transactions."
+    }
+  }
+}
