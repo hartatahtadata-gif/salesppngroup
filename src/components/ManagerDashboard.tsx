@@ -88,6 +88,7 @@ export default function ManagerDashboard({
   const [formRole, setFormRole] = useState<UserRole>(UserRole.STAFF);
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
   const [formAvatar, setFormAvatar] = useState('');
+  const [formPassword, setFormPassword] = useState('');
   const [formError, setFormError] = useState('');
 
   const IndonesianMonths = [
@@ -304,6 +305,7 @@ export default function ManagerDashboard({
     setFormRole(UserRole.STAFF);
     setFormStatus('active');
     setFormAvatar('');
+    setFormPassword('123456'); // Default password for new accounts
     setFormError('');
     setIsUserModalOpen(true);
   };
@@ -318,6 +320,7 @@ export default function ManagerDashboard({
     setFormRole(user.role);
     setFormStatus(user.status || 'active');
     setFormAvatar(user.avatarUrl || '');
+    setFormPassword(user.password || '123456');
     setFormError('');
     setIsUserModalOpen(true);
   };
@@ -335,6 +338,11 @@ export default function ManagerDashboard({
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formEmail)) {
       setFormError('Format email tidak valid.');
+      return;
+    }
+
+    if (!formPassword.trim()) {
+      setFormError('Kata sandi wajib diisi.');
       return;
     }
 
@@ -369,7 +377,8 @@ export default function ManagerDashboard({
       role: formRole,
       phone: formPhone.trim() || undefined,
       status: formStatus,
-      avatarUrl: finalAvatar
+      avatarUrl: finalAvatar,
+      password: formPassword.trim()
     };
 
     onSaveUser(savedUser);
@@ -793,6 +802,7 @@ export default function ManagerDashboard({
                     <th className="py-3 px-5">Nama & Profil</th>
                     <th className="py-3 px-4">Kontak Email</th>
                     <th className="py-3 px-4">No. HP</th>
+                    <th className="py-3 px-4">Kata Sandi</th>
                     <th className="py-3 px-4">Role Akses</th>
                     <th className="py-3 px-4">Status Akun</th>
                     <th className="py-3 px-5 text-center">Aksi / Kontrol</th>
@@ -801,7 +811,7 @@ export default function ManagerDashboard({
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-slate-400 font-medium">
+                      <td colSpan={7} className="text-center py-8 text-slate-400 font-medium">
                         Tidak ada pengguna yang cocok dengan kriteria pencarian Anda.
                       </td>
                     </tr>
@@ -831,6 +841,9 @@ export default function ManagerDashboard({
 
                         {/* Phone */}
                         <td className="py-3.5 px-4 font-mono text-slate-500">{user.phone || '-'}</td>
+
+                        {/* Password */}
+                        <td className="py-3.5 px-4 font-mono text-slate-600 bg-slate-50/30 font-semibold">{user.password || '123456'}</td>
 
                         {/* Role Badge */}
                         <td className="py-3.5 px-4">
@@ -1138,6 +1151,19 @@ export default function ManagerDashboard({
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                  required
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Kata Sandi (Password untuk Login)</label>
+                <input
+                  type="text"
+                  placeholder="Masukkan password akun..."
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium font-mono"
                   required
                 />
               </div>

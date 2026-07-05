@@ -27,9 +27,16 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         setError('Akun Anda dinonaktifkan oleh Manajer. Silakan hubungi Manajer Anda.');
         return;
       }
+      
+      const userPassword = matchedUser.password || '123456';
+      if (password !== userPassword) {
+        setError('Kata sandi yang Anda masukkan salah.');
+        return;
+      }
+      
       onLogin(matchedUser);
     } else {
-      setError('User tidak ditemukan. Gunakan salah satu email dari panel Quick Login di bawah.');
+      setError('User tidak ditemukan. Gunakan salah satu email dari panel PILIH PROFIL di bawah.');
     }
   };
 
@@ -137,7 +144,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
           {/* Quick Login Section */}
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Login Instan Sebagai Demo</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">PILIH PROFIL</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Staff Button */}
               {users.filter(u => u.role === UserRole.STAFF).slice(0, 1).map(user => (

@@ -12,6 +12,7 @@ export interface User {
   avatarUrl?: string;
   phone?: string;
   status?: 'active' | 'inactive';
+  password?: string;
 }
 
 export interface Product {

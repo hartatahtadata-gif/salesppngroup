@@ -8,7 +8,8 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.STAFF,
     phone: '0812-3456-7890',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    status: 'active'
+    status: 'active',
+    password: '123456'
   },
   {
     id: 'staff-2',
@@ -17,7 +18,8 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.STAFF,
     phone: '0812-9876-5432',
     avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    status: 'active'
+    status: 'active',
+    password: '123456'
   },
   {
     id: 'staff-3',
@@ -26,7 +28,8 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.STAFF,
     phone: '0813-4455-6677',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    status: 'active'
+    status: 'active',
+    password: '123456'
   },
   {
     id: 'admin-1',
@@ -35,7 +38,8 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.ADMIN,
     phone: '0811-2233-4455',
     avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    status: 'active'
+    status: 'active',
+    password: '123456'
   },
   {
     id: 'manager-1',
@@ -44,7 +48,8 @@ export const INITIAL_USERS: User[] = [
     role: UserRole.MANAGER,
     phone: '0812-0000-1111',
     avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-    status: 'active'
+    status: 'active',
+    password: '123456'
   }
 ];
 

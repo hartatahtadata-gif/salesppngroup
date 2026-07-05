@@ -23,7 +23,8 @@ service cloud.firestore {
         && data.role is string && (data.role == 'manager' || data.role == 'admin' || data.role == 'staff')
         && data.status is string && (data.status == 'active' || data.status == 'inactive')
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 50))
-        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 2048));
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 2048))
+        && (!('password' in data) || (data.password is string && data.password.size() <= 128));
     }
     
     function isValidProduct(data) {
