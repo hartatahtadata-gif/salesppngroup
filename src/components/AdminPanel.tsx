@@ -76,12 +76,14 @@ export default function AdminPanel({
   // Transaction form states
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [selectedTxType, setSelectedTxType] = useState<TransactionType>(TransactionType.INTAKE);
+  const [txDate, setTxDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const [txNotes, setTxNotes] = useState('');
   
   // States for deposit by product
   const [selectedDepositProductId, setSelectedDepositProductId] = useState<string>('');
   const [depositProductQty, setDepositProductQty] = useState<number>(1);
+  const [depositProductPrice, setDepositProductPrice] = useState<number>(0);
   const [depositCartItems, setDepositCartItems] = useState<{
     productId: string;
     productName: string;
@@ -251,7 +253,7 @@ export default function AdminPanel({
     setCartItems(cartItems.filter(item => item.productId !== productId));
   };
 
-  const handleAddDepositCartItem = (productId: string, quantity: number) => {
+  const handleAddDepositCartItem = (productId: string, quantity: number, customPrice?: number) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
@@ -268,11 +270,13 @@ export default function AdminPanel({
       return;
     }
 
+    const priceToUse = customPrice !== undefined ? customPrice : product.price;
+
     let updatedCart;
     if (existing) {
       updatedCart = depositCartItems.map(it => 
         it.productId === productId 
-          ? { ...it, quantity: newQty, total: newQty * product.price } 
+          ? { ...it, quantity: newQty, price: priceToUse, total: newQty * priceToUse } 
           : it
       );
     } else {
@@ -282,9 +286,9 @@ export default function AdminPanel({
           productId: product.id,
           productName: product.name,
           quantity: quantity,
-          price: product.price,
+          price: priceToUse,
           unit: product.unit,
-          total: quantity * product.price
+          total: quantity * priceToUse
         }
       ];
     }
@@ -389,10 +393,22 @@ export default function AdminPanel({
         };
       });
 
+      let transactionDate = new Date().toISOString();
+      if (selectedTxType === TransactionType.INTAKE && txDate) {
+        try {
+          const parsed = new Date(txDate);
+          const now = new Date();
+          parsed.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+          transactionDate = parsed.toISOString();
+        } catch (e) {
+          console.error("Failed to parse custom transaction date:", e);
+        }
+      }
+
       const newTx: Transaction = {
         id: `TX-${Date.now().toString().slice(-6)}`,
         type: selectedTxType,
-        date: new Date().toISOString(),
+        date: transactionDate,
         staffId: staffUser.id,
         staffName: staffUser.name,
         adminId: currentAdmin.id,
@@ -766,6 +782,21 @@ export default function AdminPanel({
                   </div>
                 </div>
 
+                {/* 2b. Tanggal untuk Bawa Produk */}
+                {selectedTxType === TransactionType.INTAKE && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Tanggal Bawa Produk</label>
+                    <input
+                      type="date"
+                      value={txDate}
+                      onChange={(e) => setTxDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold font-mono"
+                      id="tx-custom-date-input"
+                      required
+                    />
+                  </div>
+                )}
+
                 {/* 3. Conditional: Deposit Amount vs Cart List */}
                 {selectedTxType === TransactionType.DEPOSIT ? (
                   <div className="space-y-4">
@@ -788,9 +819,16 @@ export default function AdminPanel({
                             <select
                               value={selectedDepositProductId}
                               onChange={(e) => {
-                                setSelectedDepositProductId(e.target.value);
+                                const val = e.target.value;
+                                setSelectedDepositProductId(val);
                                 setDepositProductQty(1);
                                 setTxError('');
+                                const prod = undepositedProductsOfSelectedStaff.find(p => p.id === val);
+                                if (prod) {
+                                  setDepositProductPrice(prod.price);
+                                } else {
+                                  setDepositProductPrice(0);
+                                }
                               }}
                               className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-slate-100"
                               id="deposit-product-select"
@@ -815,8 +853,8 @@ export default function AdminPanel({
                                       <span>Maksimal yang belum disetor:</span>
                                       <span className="font-bold text-slate-900">{prod.unpaidQty} {prod.unit}</span>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                      <div className="flex-1">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
                                         <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Jumlah PCS yang Disetor</label>
                                         <input
                                           type="number"
@@ -830,14 +868,28 @@ export default function AdminPanel({
                                           className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 font-bold"
                                         />
                                       </div>
-                                      <div className="shrink-0 text-right">
-                                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Total Nilai</label>
-                                        <span className="text-xs font-black text-emerald-700">{formatRupiah(depositProductQty * prod.price)}</span>
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Harga per PCS (Rp)</label>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          value={depositProductPrice}
+                                          onChange={(e) => {
+                                            setDepositProductPrice(Math.max(0, Number(e.target.value)));
+                                          }}
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 font-bold font-mono"
+                                        />
                                       </div>
                                     </div>
+                                    
+                                    <div className="flex justify-between items-center bg-white/50 p-2.5 rounded-lg border border-slate-200/50">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Total Nilai Setoran</span>
+                                      <span className="text-sm font-black text-emerald-700 font-mono">{formatRupiah(depositProductQty * depositProductPrice)}</span>
+                                    </div>
+
                                     <button
                                       type="button"
-                                      onClick={() => handleAddDepositCartItem(selectedDepositProductId, depositProductQty)}
+                                      onClick={() => handleAddDepositCartItem(selectedDepositProductId, depositProductQty, depositProductPrice)}
                                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold py-2 rounded-lg transition-colors cursor-pointer"
                                     >
                                       Tambahkan ke Setoran
