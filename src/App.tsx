@@ -328,16 +328,16 @@ export default function App() {
                   <div className="bg-indigo-50 p-1.5 rounded-xl border border-indigo-100 flex items-center justify-center">
                     <img 
                       src="https://drive.google.com/thumbnail?id=1L8BTmeULOdJhKhVhE-6ZNI23FbiWWkEu&sz=120" 
-                      alt="Logo PT. Distribusi Nusantara" 
+                      alt="Logo PPN Group" 
                       className="h-6 w-6 object-contain rounded-lg"
                       referrerPolicy="no-referrer"
                     />
                   </div>
                   <div className="hidden sm:block">
-                    <span className="font-bold text-sm tracking-tight text-slate-850 block">PT. Distribusi Nusantara</span>
-                    <span className="text-[10px] text-slate-400 font-medium block -mt-0.5">Sistem Monitor Pengambilan Produk</span>
+                    <span className="font-bold text-sm tracking-tight text-slate-850 block">PPN Group</span>
+                    <span className="text-[10px] text-slate-400 font-medium block -mt-0.5">Monitor Pengambilan Produk dan Setoran</span>
                   </div>
-                  <span className="font-bold text-sm tracking-tight text-slate-850 sm:hidden">MOP Staff</span>
+                  <span className="font-bold text-sm tracking-tight text-slate-850 sm:hidden">Sales PPN Group</span>
                 </div>
 
                 {/* Profile and Logout info */}

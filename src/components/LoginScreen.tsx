@@ -52,22 +52,20 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
           <div className="absolute -left-12 -top-12 w-48 h-48 bg-violet-500/10 rounded-full blur-2xl pointer-events-none"></div>
           
           <div className="z-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-white p-1.5 rounded-xl border border-white/20 flex items-center justify-center shadow-sm">
-                <img 
-                  src="https://drive.google.com/thumbnail?id=1L8BTmeULOdJhKhVhE-6ZNI23FbiWWkEu&sz=120" 
-                  alt="Logo PT. Distribusi Nusantara" 
-                  className="h-8 w-8 object-contain rounded-lg"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <span className="font-sans font-extrabold text-lg tracking-wider text-white">MOP STAFF</span>
+            <div className="flex items-center gap-4 mb-6">
+              <img 
+                src="https://drive.google.com/thumbnail?id=1L8BTmeULOdJhKhVhE-6ZNI23FbiWWkEu&sz=120" 
+                alt="Logo PPN Group" 
+                className="w-24 h-24 object-contain shrink-0"
+                referrerPolicy="no-referrer"
+              />
+              <span className="font-sans font-extrabold text-lg tracking-wider text-white">SALES PPN GROUP</span>
             </div>
           </div>
 
           <div className="my-auto z-10 py-8">
             <h1 className="font-sans font-extrabold text-3xl leading-tight tracking-tight mb-4 text-white">
-              Monitor Pengambilan Produk Penjualan
+              Monitor Pengambilan Produk dan Setoran
             </h1>
             <p className="text-slate-300 text-sm leading-relaxed font-sans">
               Pantau pengambilan produk, kelola setoran keuangan, catat retur, dan lihat performa penjualan dalam satu dashboard terintegrasi.
@@ -76,7 +74,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
           <div className="z-10 text-xs text-slate-400 font-mono border-t border-white/10 pt-4 flex justify-between items-center">
             <span>Versi 1.1.0 (Stable)</span>
-            <span>PT. Distribusi Nusantara</span>
+            <span>PPN Group</span>
           </div>
         </div>
 
