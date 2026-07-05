@@ -33,7 +33,14 @@ import {
 } from './lib/firebase';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('mop_current_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   
   // App-level shared database states
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,6 +57,13 @@ export default function App() {
   // Load and sync with Firebase if configured, otherwise use localStorage fallback
   useEffect(() => {
     const loadAndSyncData = async () => {
+      // 1. Immediately load whatever is currently in localStorage (or initial data if fresh)
+      // This prevents visual flicker and ensures there is ALWAYS a valid local copy of user updates.
+      const localData = getStoredData();
+      setProducts(localData.products);
+      setTransactions(localData.transactions);
+      setUsers(localData.users);
+
       if (isFirebaseConfigured()) {
         try {
           setSyncing(true);
@@ -57,7 +71,7 @@ export default function App() {
           if (isConnected) {
             setFirebaseActive(true);
             
-            // Seed default dataset to Firestore if collections are empty (using the pristine initial template)
+            // Seed default dataset to Firestore ONLY if the Firestore collections are completely empty
             await seedInitialFirebaseData(INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, INITIAL_USERS);
 
             // Fetch live cloud data
@@ -65,40 +79,28 @@ export default function App() {
             const fbTransactions = await getTransactionsFromFirebase();
             const fbUsers = await getUsersFromFirebase();
 
-            // Clear any old local storage data to prevent any interference
-            try {
-              localStorage.removeItem('mop_products');
-              localStorage.removeItem('mop_transactions');
-              localStorage.removeItem('mop_users');
-            } catch (e) {}
+            // Use live Firebase data if successfully retrieved
+            const finalProducts = fbProducts && fbProducts.length > 0 ? fbProducts : localData.products;
+            const finalTransactions = fbTransactions && fbTransactions.length > 0 ? fbTransactions : localData.transactions;
+            const finalUsers = fbUsers && fbUsers.length > 0 ? fbUsers : localData.users;
 
-            if (fbProducts) setProducts(fbProducts);
-            if (fbTransactions) setTransactions(fbTransactions);
-            if (fbUsers) setUsers(fbUsers);
+            setProducts(finalProducts);
+            setTransactions(finalTransactions);
+            setUsers(finalUsers);
+
+            // Update localStorage so that it is always synchronized with the latest cloud data as a robust cache
+            saveStoredData(finalProducts, finalTransactions, finalUsers);
           } else {
-            // Firebase is configured but we couldn't connect, fall back to localStorage
-            console.warn("Firebase configured but connection failed. Falling back to offline mode.");
-            const localData = getStoredData();
-            setProducts(localData.products);
-            setTransactions(localData.transactions);
-            setUsers(localData.users);
+            console.warn("Firebase configured but connection failed. Using cached offline data.");
           }
         } catch (error) {
-          console.error("Firebase database synchronization failed. Continuing offline:", error);
-          const localData = getStoredData();
-          setProducts(localData.products);
-          setTransactions(localData.transactions);
-          setUsers(localData.users);
+          console.error("Firebase database synchronization failed. Using cached offline data:", error);
         } finally {
           setSyncing(false);
           setLoading(false);
         }
       } else {
         // No Firebase configuration, run in pure localStorage Mode
-        const localData = getStoredData();
-        setProducts(localData.products);
-        setTransactions(localData.transactions);
-        setUsers(localData.users);
         setLoading(false);
       }
     };
@@ -280,10 +282,20 @@ export default function App() {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    try {
+      localStorage.setItem('mop_current_user', JSON.stringify(user));
+    } catch (e) {
+      console.error("Failed to persist login session:", e);
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    try {
+      localStorage.removeItem('mop_current_user');
+    } catch (e) {
+      console.error("Failed to clear login session:", e);
+    }
   };
 
   if (loading) {
