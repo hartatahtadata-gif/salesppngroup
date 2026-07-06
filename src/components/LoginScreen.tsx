@@ -61,14 +61,14 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
           <div className="absolute -left-12 -top-12 w-48 h-48 bg-violet-500/10 rounded-full blur-2xl pointer-events-none"></div>
           
           <div className="z-10">
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center gap-2 mb-6">
               <img 
                 src="https://drive.google.com/thumbnail?id=1L8BTmeULOdJhKhVhE-6ZNI23FbiWWkEu&sz=120" 
                 alt="Logo PPN Group" 
                 className="w-24 h-24 object-contain shrink-0"
                 referrerPolicy="no-referrer"
               />
-              <span className="font-sans font-extrabold text-lg tracking-wider text-white">SALES PPN GROUP</span>
+              <span className="font-sans font-extrabold text-lg tracking-wider text-white -ml-2">SALES PPN GROUP</span>
             </div>
           </div>
 
@@ -91,7 +91,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         <div className="md:col-span-7 p-8 md:p-10 flex flex-col justify-center bg-white">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-900 font-sans tracking-tight">Selamat Datang Kembali</h2>
-            <p className="text-slate-500 text-sm mt-1">Silakan masuk menggunakan akun Anda atau pilih akun demo di bawah.</p>
+            <p className="text-slate-500 text-sm mt-1">Silakan masuk menggunakan akun Anda atau pilih akun profil di bawah.</p>
           </div>
 
           {error && (
@@ -175,17 +175,27 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                     key={user.id}
                     type="button"
                     onClick={() => selectQuickUser(user)}
-                    className={`bg-slate-50 border border-slate-200 p-3 rounded-xl text-left transition-all duration-200 group cursor-pointer ${bgBorderHover}`}
+                    className={`bg-slate-50 border border-slate-200 p-3 rounded-xl text-left transition-all duration-200 group cursor-pointer flex items-center justify-between gap-3 ${bgBorderHover}`}
                     id={`quick-login-${user.id}`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className={`p-0.5 rounded ${roleColor.split(' ')[1]} ${roleColor.split(' ')[0]}`}>
-                        <IconComponent className="h-3 w-3" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`p-0.5 rounded ${roleColor.split(' ')[1]} ${roleColor.split(' ')[0]}`}>
+                          <IconComponent className="h-3 w-3" />
+                        </div>
+                        <span className={`text-[9px] font-bold tracking-wider uppercase ${roleColor.split(' ')[0]}`}>{roleLabel}</span>
                       </div>
-                      <span className={`text-[9px] font-bold tracking-wider uppercase ${roleColor.split(' ')[0]}`}>{roleLabel}</span>
+                      <div className="font-semibold text-slate-800 text-xs truncate">{user.name}</div>
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</div>
                     </div>
-                    <div className="font-semibold text-slate-800 text-xs truncate">{user.name}</div>
-                    <div className="text-[10px] text-slate-500 truncate mt-0.5">{user.email}</div>
+                    <div className="shrink-0">
+                      <img
+                        src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=6366F1&color=fff`}
+                        alt={user.name}
+                        className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
                   </button>
                 );
               })}
