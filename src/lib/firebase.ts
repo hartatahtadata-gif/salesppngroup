@@ -80,7 +80,8 @@ if (isFirebaseConfigured()) {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     try {
       db = initializeFirestore(app, {
-        ignoreUndefinedProperties: true
+        ignoreUndefinedProperties: true,
+        experimentalForceLongPolling: true
       });
     } catch {
       db = getFirestore(app);
