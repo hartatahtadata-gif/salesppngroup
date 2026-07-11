@@ -14,7 +14,8 @@ import {
   Calendar,
   Layers,
   AlertCircle,
-  ChevronDown
+  ChevronDown,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -155,6 +156,75 @@ export default function AdminPanel({
   const [editTxError, setEditTxError] = useState('');
 
   const staffUsers = useMemo(() => users.filter(u => u.role === 'staff'), [users]);
+
+  // Memoized sales summary for the dashboard table based on selectedMonth and selectedYear
+  const salesDashboardData = useMemo(() => {
+    const staffMap = new Map<string, { id: string; name: string; phone: string }>();
+    
+    // Add all current staff users from the users prop
+    staffUsers.forEach(u => {
+      staffMap.set(u.id, { id: u.id, name: u.name, phone: u.phone || '-' });
+    });
+
+    // Also scan transactions to make sure we don't miss anyone, in case they aren't in users list
+    transactions.forEach(tx => {
+      if (!staffMap.has(tx.staffId)) {
+        staffMap.set(tx.staffId, { id: tx.staffId, name: tx.staffName, phone: '-' });
+      }
+    });
+
+    const staffList = Array.from(staffMap.values());
+
+    // Filter transactions by selected month and year
+    const monthlyTxs = transactions.filter(tx => {
+      const txDate = new Date(tx.date);
+      const matchMonth = selectedMonth === 'all' || txDate.getMonth() + 1 === selectedMonth;
+      const matchYear = selectedMonth === 'all' || txDate.getFullYear() === selectedYear;
+      return matchMonth && matchYear;
+    });
+
+    // Aggregate data per staff
+    return staffList.map(staff => {
+      let totalQtyBrought = 0;
+      let totalDepositValue = 0;
+      let totalBroughtValue = 0;
+      let totalReturnedValue = 0;
+      const productBreakdown: { [name: string]: number } = {};
+
+      monthlyTxs.forEach(tx => {
+        if (tx.staffId === staff.id) {
+          if (tx.type === TransactionType.INTAKE && tx.items) {
+            tx.items.forEach(it => {
+              totalQtyBrought += it.quantity;
+              totalBroughtValue += it.total || (it.quantity * it.price);
+              productBreakdown[it.productName] = (productBreakdown[it.productName] || 0) + it.quantity;
+            });
+          } else if (tx.type === TransactionType.RETURN && tx.items) {
+            tx.items.forEach(it => {
+              totalReturnedValue += it.total || (it.quantity * it.price);
+            });
+          } else if (tx.type === TransactionType.DEPOSIT) {
+            totalDepositValue += tx.amount || 0;
+          }
+        }
+      });
+
+      const totalOutstanding = totalBroughtValue - totalReturnedValue - totalDepositValue;
+
+      // Format product breakdown as a readable string
+      const breakdownText = Object.entries(productBreakdown)
+        .map(([name, qty]) => `${name} (${qty})`)
+        .join(', ') || 'Tidak ada';
+
+      return {
+        ...staff,
+        totalQtyBrought,
+        totalDepositValue,
+        totalOutstanding,
+        breakdownText
+      };
+    });
+  }, [transactions, staffUsers, selectedMonth, selectedYear]);
 
   const formatRupiah = (value: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -751,6 +821,62 @@ export default function AdminPanel({
           
           {/* COLUMN 1: CATALOG & STOK PRODUK (xl:col-span-5) */}
           <div className="xl:col-span-5 space-y-4" id="admin-col-products-catalog">
+            
+            {/* TABEL DASHBOARD: REKAP AKTIVITAS SALES */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4" id="admin-sales-summary-dashboard">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-indigo-500" />
+                  Rekap Aktivitas Sales ({selectedMonthYearLabel})
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Total kuantitas produk dibawa, total uang setoran, dan sisa kewajiban (belum disetor) per sales pada bulan laporan.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead className="bg-slate-50 border-b border-slate-200 shadow-sm">
+                    <tr className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">
+                      <th className="py-2.5 px-3">Nama Sales</th>
+                      <th className="py-2.5 px-2 text-right">Produk Dibawa</th>
+                      <th className="py-2.5 px-3 text-right">Total Setoran</th>
+                      <th className="py-2.5 px-3 text-right">Belum Disetor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {salesDashboardData.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-slate-400">Tidak ada data sales.</td>
+                      </tr>
+                    ) : (
+                      salesDashboardData.map((s) => (
+                        <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2.5 px-3 min-w-[100px]">
+                            <p className="font-bold text-slate-900 leading-tight">{s.name}</p>
+                            <p className="text-[8px] text-slate-400 font-mono mt-0.5" title={s.breakdownText}>
+                              {s.breakdownText.length > 35 ? `${s.breakdownText.slice(0, 35)}...` : s.breakdownText}
+                            </p>
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-bold text-slate-800">
+                            <span className={s.totalQtyBrought > 0 ? "bg-indigo-50/70 text-indigo-700 px-2 py-0.5 rounded-md font-extrabold text-[10px]" : "text-slate-400"}>
+                              {s.totalQtyBrought} Pcs
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-600">
+                            {formatRupiah(s.totalDepositValue)}
+                          </td>
+                          <td className={`py-2.5 px-3 text-right font-black ${s.totalOutstanding > 0 ? 'text-rose-600 bg-rose-50/20' : 'text-slate-500'}`}>
+                            {formatRupiah(s.totalOutstanding)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
