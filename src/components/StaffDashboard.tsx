@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Product, Transaction, TransactionType, User } from '../types';
+import { Product, Transaction, TransactionType, User, ApotikRecord } from '../types';
 import { 
   Briefcase,
   RotateCcw,
@@ -10,7 +10,12 @@ import {
   DollarSign,
   Inbox,
   Calendar,
-  ChevronDown
+  ChevronDown,
+  Plus,
+  Trash,
+  Building,
+  MapPin,
+  ClipboardList
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -20,17 +25,139 @@ interface StaffDashboardProps {
   transactions: Transaction[];
   onAddTransaction: (newTransaction: Transaction) => void;
   onUpdateProducts: (updatedProducts: Product[]) => void;
+  apotikRecords: ApotikRecord[];
+  onAddApotikRecord: (record: ApotikRecord) => void;
+  onDeleteApotikRecord: (recordId: string) => void;
 }
 
 export default function StaffDashboard({
   currentStaff,
   products,
-  transactions
+  transactions,
+  apotikRecords = [],
+  onAddApotikRecord,
+  onDeleteApotikRecord
 }: StaffDashboardProps) {
 
   const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(new Date().getMonth() + 1); // 1-12 or 'all'
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedLedgerProductId, setSelectedLedgerProductId] = useState<string>('');
+
+  // Local state for Apotik Input Form
+  const [namaApotik, setNamaApotik] = useState('');
+  const [alamat, setAlamat] = useState('');
+  const [kecamatan, setKecamatan] = useState('');
+  const [kabupaten, setKabupaten] = useState('');
+  const [formProductId, setFormProductId] = useState('');
+  const [formJumlah, setFormJumlah] = useState<number>(1);
+  const [formNilai, setFormNilai] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+
+  // Handle selected product change
+  const handleProductChange = (prodId: string) => {
+    setFormProductId(prodId);
+    const prod = products.find(p => p.id === prodId);
+    if (prod) {
+      setFormNilai(prod.price);
+    } else {
+      setFormNilai(0);
+    }
+  };
+
+  // Initialize selected product
+  React.useEffect(() => {
+    if (products.length > 0 && !formProductId) {
+      handleProductChange(products[0].id);
+    }
+  }, [products]);
+
+  const handleSubmitApotik = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!namaApotik.trim()) {
+      setErrorMsg('Nama apotik tidak boleh kosong');
+      return;
+    }
+    if (!alamat.trim()) {
+      setErrorMsg('Alamat apotik tidak boleh kosong');
+      return;
+    }
+    if (!kecamatan.trim()) {
+      setErrorMsg('Kecamatan tidak boleh kosong');
+      return;
+    }
+    if (!kabupaten.trim()) {
+      setErrorMsg('Kabupaten tidak boleh kosong');
+      return;
+    }
+    if (!formProductId) {
+      setErrorMsg('Silakan pilih produk');
+      return;
+    }
+    if (formJumlah <= 0) {
+      setErrorMsg('Jumlah harus lebih dari 0');
+      return;
+    }
+
+    const prod = products.find(p => p.id === formProductId);
+    if (!prod) {
+      setErrorMsg('Produk tidak valid');
+      return;
+    }
+
+    const newRecord: ApotikRecord = {
+      id: 'APT-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+      namaApotik: namaApotik.trim(),
+      alamat: alamat.trim(),
+      kecamatan: kecamatan.trim(),
+      kabupaten: kabupaten.trim(),
+      productId: formProductId,
+      productName: prod.name,
+      jumlah: formJumlah,
+      satuan: prod.unit,
+      nilai: formNilai,
+      total: formJumlah * formNilai,
+      staffId: currentStaff.id,
+      staffName: currentStaff.name,
+      date: new Date().toISOString()
+    };
+
+    onAddApotikRecord(newRecord);
+    
+    // Partially reset the form: keep apotik details but reset items to make batch entries easier
+    setFormJumlah(1);
+    setSuccessMsg('Berhasil menyimpan data apotik!');
+    
+    // Auto clear success message after 3 seconds
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const handleResetForm = () => {
+    setNamaApotik('');
+    setAlamat('');
+    setKecamatan('');
+    setKabupaten('');
+    setFormJumlah(1);
+    if (products.length > 0) {
+      handleProductChange(products[0].id);
+    }
+    setErrorMsg('');
+    setSuccessMsg('');
+  };
+
+  const selectedProduct = useMemo(() => {
+    return products.find(p => p.id === formProductId);
+  }, [formProductId, products]);
+
+  // Filter apotik records belonging to the current staff
+  const personalApotikRecords = useMemo(() => {
+    return apotikRecords
+      .filter(r => r.staffId === currentStaff.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [apotikRecords, currentStaff.id]);
 
   const IndonesianMonths = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -835,6 +962,263 @@ export default function StaffDashboard({
             Tidak ada data produk yang tersedia.
           </div>
         )}
+      </div>
+
+      {/* SECTION: LAPORAN DATA KUNJUNGAN APOTIK */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6" id="apotik-records-section">
+        <div className="border-b border-slate-100 pb-4">
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Building className="h-4 w-4 text-emerald-500" />
+            Laporan Kunjungan & Pengisian Data Apotik
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Gunakan form di bawah untuk melaporkan aktivitas kunjungan, penawaran, atau penjualan produk di apotik / outlet.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Form Side */}
+          <div className="lg:col-span-1 bg-slate-50/60 p-5 rounded-2xl border border-slate-200/50">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+              <ClipboardList className="h-3.5 w-3.5 text-slate-500" />
+              Form Isian Data
+            </h3>
+
+            <form onSubmit={handleSubmitApotik} className="space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-semibold">{errorMsg}</span>
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs rounded-xl flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+                  <span className="font-bold">{successMsg}</span>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Nama Apotik <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={namaApotik}
+                    onChange={(e) => setNamaApotik(e.target.value)}
+                    placeholder="Contoh: Apotik Kimia Farma"
+                    className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    id="apotik-input-nama"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Alamat Apotik <span className="text-rose-500">*</span></label>
+                <textarea
+                  value={alamat}
+                  onChange={(e) => setAlamat(e.target.value)}
+                  placeholder="Jl. Raya No. 123..."
+                  rows={2}
+                  className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none"
+                  id="apotik-input-alamat"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Kecamatan <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    value={kecamatan}
+                    onChange={(e) => setKecamatan(e.target.value)}
+                    placeholder="Kecamatan"
+                    className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    id="apotik-input-kecamatan"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Kabupaten <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    value={kabupaten}
+                    onChange={(e) => setKabupaten(e.target.value)}
+                    placeholder="Kabupaten"
+                    className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    id="apotik-input-kabupaten"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 my-4 pt-4"></div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Pilih Produk <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <select
+                    value={formProductId}
+                    onChange={(e) => handleProductChange(e.target.value)}
+                    className="w-full appearance-none bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer pr-10"
+                    id="apotik-input-product"
+                  >
+                    <option value="">-- Pilih Produk --</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.id})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Jumlah (Qty) <span className="text-rose-500">*</span></label>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      min={1}
+                      value={formJumlah}
+                      onChange={(e) => setFormJumlah(Math.max(1, parseInt(e.target.value) || 0))}
+                      className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      id="apotik-input-qty"
+                    />
+                    <span className="text-[10px] text-slate-400 font-bold ml-1.5 shrink-0 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
+                      {selectedProduct?.unit || 'Unit'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Nilai / Harga Satuan</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={formNilai}
+                    onChange={(e) => setFormNilai(parseInt(e.target.value) || 0)}
+                    className="w-full bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-100 text-right"
+                    id="apotik-input-nilai"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-slate-100 rounded-xl p-3 border border-slate-200 flex justify-between items-center text-xs">
+                <span className="font-bold text-slate-500 uppercase text-[10px]">Total Nilai</span>
+                <span className="font-black text-slate-800 font-mono">
+                  {formatRupiah(formJumlah * formNilai)}
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleResetForm}
+                  className="w-1/3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors cursor-pointer border border-slate-300/40"
+                  id="apotik-btn-reset"
+                >
+                  Reset
+                </button>
+                <button
+                  type="submit"
+                  className="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer hover:shadow"
+                  id="apotik-btn-save"
+                >
+                  <Plus className="h-4 w-4" />
+                  Simpan Laporan
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Table Side */}
+          <div className="lg:col-span-2 flex flex-col">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+              <Building className="h-3.5 w-3.5 text-slate-500" />
+              Daftar Kunjungan Apotik Saya ({personalApotikRecords.length})
+            </h3>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col bg-white">
+              <div className="overflow-x-auto flex-1 max-h-[480px]">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-center">
+                      <th className="py-2.5 px-2 border-r border-slate-200 w-10">NO</th>
+                      <th className="py-2.5 px-2 border-r border-slate-200">NAMA APOTIK</th>
+                      <th className="py-2.5 px-2 border-r border-slate-200">ALAMAT / WILAYAH</th>
+                      <th className="py-2.5 px-2 border-r border-slate-200">PRODUK</th>
+                      <th className="py-2.5 px-2 border-r border-slate-200 w-12 text-right">QTY</th>
+                      <th className="py-2.5 px-2 border-r border-slate-200 text-right">NILAI</th>
+                      <th className="py-2.5 px-2 border-r border-slate-200 text-right">TOTAL</th>
+                      <th className="py-2.5 px-2 w-10">AKSI</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-700">
+                    {personalApotikRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400 italic">
+                          Belum ada laporan kunjungan data apotik yang diisi.
+                        </td>
+                      </tr>
+                    ) : (
+                      personalApotikRecords.map((rec, idx) => (
+                        <tr key={rec.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
+                          <td className="py-2.5 px-2 border-r border-slate-200 font-bold text-slate-900 max-w-[120px] truncate" title={rec.namaApotik}>
+                            {rec.namaApotik}
+                          </td>
+                          <td className="py-2.5 px-2 border-r border-slate-200 max-w-[160px]" title={`${rec.alamat}, Kec. ${rec.kecamatan}, Kab. ${rec.kabupaten}`}>
+                            <div className="truncate text-slate-600 font-medium">{rec.alamat}</div>
+                            <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-0.5">
+                              <MapPin className="h-2 w-2 shrink-0 text-slate-300" />
+                              <span className="truncate">Kec. {rec.kecamatan}, Kab. {rec.kabupaten}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-2 border-r border-slate-200 font-bold text-slate-800 max-w-[100px] truncate" title={rec.productName}>
+                            {rec.productName}
+                          </td>
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-right font-black text-slate-900">
+                            {rec.jumlah} <span className="text-[9px] font-normal text-slate-400">{rec.satuan}</span>
+                          </td>
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-right text-slate-500 font-mono">{formatRupiah(rec.nilai)}</td>
+                          <td className="py-2.5 px-2 border-r border-slate-200 text-right font-black text-emerald-600 font-mono">{formatRupiah(rec.total)}</td>
+                          <td className="py-2.5 px-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => onDeleteApotikRecord(rec.id)}
+                              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1 rounded transition-colors cursor-pointer"
+                              title="Hapus data"
+                              id={`apotik-btn-delete-${rec.id}`}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                    {/* Empty Rows to maintain spreadsheet aesthetic if list is short */}
+                    {personalApotikRecords.length < 5 &&
+                      Array.from({ length: 5 - personalApotikRecords.length }).map((_, i) => (
+                        <tr key={`empty-apt-${i}`} className="h-9">
+                          <td className="border-r border-slate-200"></td>
+                          <td className="border-r border-slate-200"></td>
+                          <td className="border-r border-slate-200"></td>
+                          <td className="border-r border-slate-200"></td>
+                          <td className="border-r border-slate-200"></td>
+                          <td className="border-r border-slate-200"></td>
+                          <td className="border-r border-slate-200"></td>
+                          <td></td>
+                        </tr>
+                      ))
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>

@@ -10,7 +10,7 @@ import {
   getDocFromServer,
   Firestore
 } from "firebase/firestore";
-import { Product, Transaction, User } from "../types";
+import { Product, Transaction, User, ApotikRecord } from "../types";
 
 export enum OperationType {
   CREATE = 'create',
@@ -269,4 +269,44 @@ export async function seedInitialFirebaseData(
 // Run connection test if configured
 if (isFirebaseConfigured()) {
   testConnection();
+}
+
+// Fetch all apotik records
+export async function getApotikRecordsFromFirebase(): Promise<ApotikRecord[] | null> {
+  if (!db) return null;
+  const path = "apotik_records";
+  try {
+    const querySnapshot = await getDocs(collection(db, path));
+    const list: ApotikRecord[] = [];
+    querySnapshot.forEach((document) => {
+      list.push(document.data() as ApotikRecord);
+    });
+    // Sort by date descending (newest first)
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+  }
+}
+
+// Save or Update an apotik record
+export async function saveApotikRecordToFirebase(record: ApotikRecord): Promise<void> {
+  if (!db) return;
+  const path = `apotik_records/${record.id}`;
+  try {
+    const cleaned = JSON.parse(JSON.stringify(record));
+    await setDoc(doc(db, "apotik_records", record.id), cleaned);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// Delete an apotik record
+export async function deleteApotikRecordFromFirebase(recordId: string): Promise<void> {
+  if (!db) return;
+  const path = `apotik_records/${recordId}`;
+  try {
+    await deleteDoc(doc(db, "apotik_records", recordId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
 }

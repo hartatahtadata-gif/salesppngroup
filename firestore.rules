@@ -49,6 +49,23 @@ service cloud.firestore {
         && (!('items' in data) || data.items is list);
     }
 
+    function isValidApotikRecord(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.namaApotik is string && data.namaApotik.size() <= 256
+        && data.alamat is string && data.alamat.size() <= 500
+        && data.kecamatan is string && data.kecamatan.size() <= 128
+        && data.kabupaten is string && data.kabupaten.size() <= 128
+        && data.productId is string && data.productId.size() <= 128
+        && data.productName is string && data.productName.size() <= 256
+        && data.jumlah is number
+        && data.satuan is string && data.satuan.size() <= 50
+        && data.nilai is number
+        && data.total is number
+        && data.staffId is string && data.staffId.size() <= 128
+        && data.staffName is string && data.staffName.size() <= 200
+        && data.date is string && data.date.size() <= 50;
+    }
+
     match /users/{userId} {
       allow read: if true;
       allow create, update: if isValidId(userId) && isValidUser(incoming());
@@ -65,6 +82,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isValidId(transactionId) && isValidTransaction(incoming());
       allow delete: if isValidId(transactionId);
+    }
+
+    match /apotik_records/{recordId} {
+      allow read: if true;
+      allow create, update: if isValidId(recordId) && isValidApotikRecord(incoming());
+      allow delete: if isValidId(recordId);
     }
 
     match /test/{docId} {

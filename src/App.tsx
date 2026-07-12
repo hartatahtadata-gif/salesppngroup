@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, Product, Transaction, TransactionType } from './types';
+import { User, UserRole, Product, Transaction, TransactionType, ApotikRecord } from './types';
 import { getStoredData, saveStoredData, INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, INITIAL_USERS } from './data/initialData';
 import LoginScreen from './components/LoginScreen';
 import StaffDashboard from './components/StaffDashboard';
@@ -29,7 +29,10 @@ import {
   saveUserToFirebase,
   deleteUserFromFirebase,
   seedInitialFirebaseData,
-  testConnection
+  testConnection,
+  getApotikRecordsFromFirebase,
+  saveApotikRecordToFirebase,
+  deleteApotikRecordFromFirebase
 } from './lib/firebase';
 
 export default function App() {
@@ -46,6 +49,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [apotikRecords, setApotikRecords] = useState<ApotikRecord[]>([]);
   
   // Loading state
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,7 @@ export default function App() {
       setProducts(localData.products);
       setTransactions(localData.transactions);
       setUsers(localData.users);
+      setApotikRecords(localData.apotikRecords || []);
 
       if (isFirebaseConfigured()) {
         try {
@@ -78,6 +83,7 @@ export default function App() {
             let fbProducts = await getProductsFromFirebase();
             let fbTransactions = await getTransactionsFromFirebase();
             let fbUsers = await getUsersFromFirebase();
+            let fbApotikRecords = await getApotikRecordsFromFirebase();
 
             // Clear any lingering demo data in Firestore to prevent them from showing up
             const DEMO_PRODUCT_IDS = ['PRD-01', 'PRD-02', 'PRD-03', 'PRD-04', 'PRD-05', 'PRD-06', 'PRD-07'];
@@ -114,13 +120,15 @@ export default function App() {
             const finalProducts = fbProducts && fbProducts.length > 0 ? fbProducts : localData.products;
             const finalTransactions = fbTransactions && fbTransactions.length > 0 ? fbTransactions : localData.transactions;
             const finalUsers = fbUsers && fbUsers.length > 0 ? fbUsers : localData.users;
+            const finalApotikRecords = fbApotikRecords && fbApotikRecords.length > 0 ? fbApotikRecords : (localData.apotikRecords || []);
 
             setProducts(finalProducts);
             setTransactions(finalTransactions);
             setUsers(finalUsers);
+            setApotikRecords(finalApotikRecords);
 
             // Update localStorage so that it is always synchronized with the latest cloud data as a robust cache
-            saveStoredData(finalProducts, finalTransactions, finalUsers);
+            saveStoredData(finalProducts, finalTransactions, finalUsers, finalApotikRecords);
           } else {
             console.warn("Firebase configured but connection failed. Using cached offline data.");
           }
@@ -300,13 +308,43 @@ export default function App() {
   const handleDeleteUser = async (userId: string) => {
     const updatedUsers = users.filter(u => u.id !== userId);
     setUsers(updatedUsers);
-    saveStoredData(products, transactions, updatedUsers);
+    saveStoredData(products, transactions, updatedUsers, apotikRecords);
 
     if (isFirebaseConfigured() && firebaseActive) {
       try {
         await deleteUserFromFirebase(userId);
       } catch (e) {
         console.error("Firebase user deletion sync error:", e);
+      }
+    }
+  };
+
+  const handleAddApotikRecord = async (record: ApotikRecord) => {
+    const updated = [record, ...apotikRecords];
+    setApotikRecords(updated);
+    saveStoredData(products, transactions, users, updated);
+
+    if (isFirebaseConfigured() && firebaseActive) {
+      try {
+        await saveApotikRecordToFirebase(record);
+      } catch (e) {
+        console.error("Firebase apotik record save error:", e);
+      }
+    }
+  };
+
+  const handleDeleteApotikRecord = async (recordId: string) => {
+    if (confirm('Apakah Anda yakin ingin menghapus laporan data apotik ini?')) {
+      const updated = apotikRecords.filter(r => r.id !== recordId);
+      setApotikRecords(updated);
+      saveStoredData(products, transactions, users, updated);
+
+      if (isFirebaseConfigured() && firebaseActive) {
+        try {
+          await deleteApotikRecordFromFirebase(recordId);
+        } catch (e) {
+          console.error("Firebase apotik record delete error:", e);
+        }
       }
     }
   };
@@ -446,6 +484,9 @@ export default function App() {
                       transactions={transactions}
                       onAddTransaction={handleAddTransaction}
                       onUpdateProducts={handleUpdateProducts}
+                      apotikRecords={apotikRecords}
+                      onAddApotikRecord={handleAddApotikRecord}
+                      onDeleteApotikRecord={handleDeleteApotikRecord}
                     />
                   </motion.div>
                 )}

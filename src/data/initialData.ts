@@ -36,37 +36,45 @@ export const getStoredData = () => {
       localStorage.setItem('mop_products', JSON.stringify([]));
       localStorage.setItem('mop_transactions', JSON.stringify([]));
       localStorage.setItem('mop_users', JSON.stringify(INITIAL_USERS));
+      localStorage.setItem('mop_apotik_records', JSON.stringify([]));
       return {
         products: [],
         transactions: [],
-        users: INITIAL_USERS
+        users: INITIAL_USERS,
+        apotikRecords: []
       };
     }
 
     const products = localStorage.getItem('mop_products');
     const transactions = localStorage.getItem('mop_transactions');
     const users = localStorage.getItem('mop_users');
+    const apotikRecords = localStorage.getItem('mop_apotik_records');
 
     return {
       products: products ? JSON.parse(products) : INITIAL_PRODUCTS,
       transactions: transactions ? JSON.parse(transactions) : INITIAL_TRANSACTIONS,
-      users: users ? JSON.parse(users) : INITIAL_USERS
+      users: users ? JSON.parse(users) : INITIAL_USERS,
+      apotikRecords: apotikRecords ? JSON.parse(apotikRecords) : []
     };
   } catch (e) {
     console.error('Error reading localStorage', e);
     return {
       products: INITIAL_PRODUCTS,
       transactions: INITIAL_TRANSACTIONS,
-      users: INITIAL_USERS
+      users: INITIAL_USERS,
+      apotikRecords: []
     };
   }
 };
 
-export const saveStoredData = (products: Product[], transactions: Transaction[], users: User[]) => {
+export const saveStoredData = (products: Product[], transactions: Transaction[], users: User[], apotikRecords?: any[]) => {
   try {
     localStorage.setItem('mop_products', JSON.stringify(products));
     localStorage.setItem('mop_transactions', JSON.stringify(transactions));
     localStorage.setItem('mop_users', JSON.stringify(users));
+    if (apotikRecords) {
+      localStorage.setItem('mop_apotik_records', JSON.stringify(apotikRecords));
+    }
   } catch (e) {
     console.error('Error saving to localStorage', e);
   }
